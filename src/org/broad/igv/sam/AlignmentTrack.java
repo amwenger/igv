@@ -27,6 +27,7 @@ package org.broad.igv.sam;
 
 //~--- non-JDK imports --------------------------------------------------------
 
+import com.google.gson.*;
 import com.iontorrent.data.FlowDistribution;
 import com.iontorrent.data.ReadInfo;
 import com.iontorrent.utils.LocationListener;
@@ -40,6 +41,7 @@ import org.broad.igv.feature.Locus;
 import org.broad.igv.feature.Range;
 import org.broad.igv.feature.genome.ChromosomeNameComparator;
 import org.broad.igv.feature.genome.Genome;
+import org.broad.igv.feature.Chromosome;
 import org.broad.igv.lists.GeneList;
 import org.broad.igv.renderer.GraphicUtils;
 import org.broad.igv.session.IGVSessionReader;
@@ -66,6 +68,7 @@ import org.broad.igv.util.ResourceLocator;
 import org.broad.igv.util.StringUtils;
 import org.broad.igv.util.Utilities;
 import org.broad.igv.util.blat.BlatClient;
+import org.broad.igv.util.HttpUtils;
 import org.broad.igv.util.extview.ExtendViewClient;
 import org.broad.igv.util.collections.CollUtils;
 import org.w3c.dom.Node;
@@ -83,6 +86,10 @@ import java.awt.event.MouseEvent;
 import java.text.NumberFormat;
 import java.util.*;
 import java.util.List;
+import java.io.IOException;
+import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 /**
  * @author jrobinso
@@ -1384,6 +1391,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             addSeparator();
             addCopySequenceItem(e);
             addExtViewItem(e);
+            addRibbonItem(e);
             addBlatItem(e);
             addConsensusSequence(e);
 
@@ -2177,6 +2185,144 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 }
             });
 
+        }
+
+
+        private class RibbonBamRecord {
+            private String readName;
+            private Integer flag;
+            private String segment;
+            private Integer pos;
+            private String cigar;
+            private Integer mq;
+            private String SA;
+
+            RibbonBamRecord(String _readName, Integer _flag, String _segment,
+                Integer _pos, String _cigar, Integer _mq, String _SA) {
+                this.readName = _readName;
+                this.flag = _flag;
+                this.segment = _segment;
+                this.pos = _pos;
+                this.cigar = _cigar;
+                this.mq = _mq;
+                this.SA = _SA;
+            }
+        };
+
+
+        private class RibbonBamSq {
+            private String name;
+            private Integer end;
+
+            RibbonBamSq(String _name, Integer _end) {
+                this.name = _name;
+                this.end = _end;
+            }
+        };
+
+
+        private class RibbonBamHeader {
+            private List<RibbonBamSq> sq;
+
+            void addSq(RibbonBamSq _sq) {
+                this.sq.add(_sq);
+            }
+
+            RibbonBamHeader() {
+                this.sq = new ArrayList<RibbonBamSq>();
+            }
+        };
+
+        private class RibbonBam {
+            private RibbonBamHeader header;
+            private List<RibbonBamRecord> records;
+
+            void setHeader(RibbonBamHeader _header) {
+                this.header = _header;
+            }
+            void addRecord(RibbonBamRecord record) {
+                this.records.add(record);
+            }
+
+            RibbonBam() {
+                this.records = new ArrayList<RibbonBamRecord>();
+            }
+        }
+
+        private class RibbonDataset {
+            private RibbonBam bam;
+
+            void setBam(RibbonBam _bam) {
+                this.bam = _bam;
+            }
+        }
+
+        public void addRibbonItem(final TrackClickEvent te) {
+            // Open the current view in Ribbon for structural variant visualization.
+            final JMenuItem item = new JMenuItem("View in Ribbon");
+            add(item);
+
+            final ReferenceFrame activeFrame = te.getFrame();
+            final Alignment activeAlignment = getSpecficAlignment(te);
+
+            item.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent aEvt) {
+                    // Build a list of alignments in the active frame.
+                    List<Alignment> alignments = new ArrayList<Alignment>();
+                    AlignmentInterval interval = dataManager.getLoadedInterval(activeFrame.getCurrentRange());
+                    if (interval != null) {
+                        PackedAlignments packedAlignments = interval.getPackedAlignments();
+                        if (packedAlignments != null) {
+                            for (List<Row> alignmentRows : packedAlignments.values()) {
+                                for (Row row : alignmentRows) {
+                                    for (Alignment alignment: row.alignments) {
+                                        alignments.add(alignment);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Create a ribbon dataset as a JSON-serialized object.
+                    RibbonDataset ribbonDataset = new RibbonDataset();
+                    RibbonBam ribbonBam = new RibbonBam();
+                    RibbonBamHeader ribbonBamHeader = new RibbonBamHeader();
+                    for (Chromosome chrom: genome.getChromosomes()) {
+                        RibbonBamSq sq = new RibbonBamSq(chrom.getName(), chrom.getLength());
+                        ribbonBamHeader.addSq(sq);
+                    }
+                    ribbonBam.setHeader(ribbonBamHeader);
+
+                    for (Alignment alignment: alignments) {
+                        String SA = (String) alignment.getAttribute("SA");
+                        if (SA == null) {
+                            SA = "";
+                        }
+                        // For now flag only encodes strand.
+                        int flag = alignment.isNegativeStrand() ? 16 : 0;
+                        RibbonBamRecord bamRecord = new RibbonBamRecord(alignment.getReadName(),
+                            flag, alignment.getChr(), alignment.getAlignmentStart(),
+                            alignment.getCigarString(), alignment.getMappingQuality(), SA);
+                        ribbonBam.addRecord(bamRecord);
+                    }
+                    ribbonDataset.setBam(ribbonBam);
+
+                    Gson gson = new Gson();
+                    String req = gson.toJson(ribbonDataset);
+                    Map<String, String> params = new HashMap();
+                    params.put("igv", req);
+                    try {
+                        String result = HttpUtils.getInstance().doPost(new URL("http://ribbon/permalink_creator.php"), params);
+                        if (Desktop.isDesktopSupported()) {
+                            Desktop desktop = Desktop.getDesktop();
+                            desktop.browse(new URI(result));
+                        }
+                    }
+                    catch (IOException | URISyntaxException e) {
+                        log.info("some error");
+                    }
+                }
+            });
         }
 
         public void addExtViewItem(final TrackClickEvent te) {
