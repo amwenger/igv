@@ -2310,7 +2310,9 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                     Gson gson = new Gson();
                     String req = gson.toJson(ribbonDataset);
                     Map<String, String> params = new HashMap();
+
                     params.put("ribbon", req);
+
                     try {
                         String result = HttpUtils.getInstance().doPost(new URL("http://ribbon/permalink_creator.php"), params);
                         if (Desktop.isDesktopSupported()) {
