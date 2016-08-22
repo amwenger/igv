@@ -1,0 +1,19 @@
+INFO [2016-08-22 11:44:38,572] [Main.java:135]  Startup  IGV Version user (0)08/22/2016 11:44 AM
+INFO [2016-08-22 11:44:38,572] [Main.java:136]  Java 1.8.0_92
+INFO [2016-08-22 11:44:38,572] [DirectoryManager.java:72]  Fetching user directory... 
+INFO [2016-08-22 11:44:39,170] [Main.java:137]  Default User Directory: /Users/mnattestad
+INFO [2016-08-22 11:44:39,170] [Main.java:138]  OS: Mac OS X
+INFO [2016-08-22 11:44:40,988] [GenomeManager.java:1017]  java.io.FileNotFoundException: /Users/mnattestad/igv/genomes/user-defined-genomes.txt (No such file or directory)
+INFO [2016-08-22 11:44:41,790] [GenomeManager.java:145]  Loading genome: http://s3.amazonaws.com/igv.broadinstitute.org/genomes/hg19.genome
+INFO [2016-08-22 11:44:41,796] [URLDownloader.java:89]  Downloading http://s3.amazonaws.com/igv.broadinstitute.org/genomes/hg19.genome to /Users/mnattestad/igv/genomes/hg19.genome
+INFO [2016-08-22 11:44:47,423] [URLDownloader.java:130]  Download complete.  Total bytes downloaded = 4632219
+INFO [2016-08-22 11:44:48,841] [GenomeManager.java:192]  Genome loaded.  id= hg19
+ERROR [2016-08-22 11:44:48,882] [CommandListener.java:124]  java.net.BindException: Address already in use
+INFO [2016-08-22 11:45:19,372] [IGV.java:1707]  Loading 2 resources.
+INFO [2016-08-22 11:45:19,373] [TrackLoader.java:120]  Loading resource, path /Applications/XAMPP/xamppfiles/htdocs/ribbon/examples/Her2_region.bam
+INFO [2016-08-22 11:45:19,429] [TrackLoader.java:120]  Loading resource, path /Applications/XAMPP/xamppfiles/htdocs/ribbon/examples/Her2_region.bam.bai
+INFO [2016-08-22 11:45:19,431] [MessageUtils.java:74]  <html><b>ERROR:</b> Loading SAM/BAM index files are not supported:  /Applications/XAMPP/xamppfiles/htdocs/ribbon/examples/Her2_region.bam.bai<br>Load the SAM or BAM file directly. 
+INFO [2016-08-22 11:45:42,270] [HttpUtils.java:837]  Range-byte request succeeded
+INFO [2016-08-22 11:45:56,689] [AlignmentTrack.java:2322]  some error
+INFO [2016-08-22 11:46:18,247] [AlignmentTrack.java:2322]  some error
+INFO [2016-08-22 11:46:28,214] [AlignmentTrack.java:2322]  some error
