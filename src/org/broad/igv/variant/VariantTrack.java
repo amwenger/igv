@@ -596,22 +596,22 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
         final int right = (int) trackRectangle.getMaxX();
 
         //Top line
-        drawLineIfVisible(g2D, visibleRectangle, Color.black, top + 1, left, right);
+        //drawLineIfVisible(g2D, visibleRectangle, Color.black, top + 1, left, right);
 
         // Bottom border
         int bottomY = trackRectangle.y + trackRectangle.height;
-        drawLineIfVisible(g2D, visibleRectangle, borderGray, bottomY, left, right);
+        //drawLineIfVisible(g2D, visibleRectangle, borderGray, bottomY, left, right);
 
         // Variant / Genotype border
         int variantGenotypeBorderY = trackRectangle.y + getVariantsHeight();
-        drawVariantBandBorder(g2D, visibleRectangle, variantGenotypeBorderY, left, right);
+        //drawVariantBandBorder(g2D, visibleRectangle, variantGenotypeBorderY, left, right);
 
         if (grouped) {
             g2D.setColor(Color.black);
             int y = trackRectangle.y + getVariantsHeight();
             for (Map.Entry<String, List<String>> entry : samplesByGroups.entrySet()) {
                 y += entry.getValue().size() * getGenotypeBandHeight() + GROUP_BORDER_WIDTH;
-                g2D.drawLine(trackRectangle.x, y, trackRectangle.x + trackRectangle.width, y);
+                //g2D.drawLine(trackRectangle.x, y, trackRectangle.x + trackRectangle.width, y);
             }
         }
     }
