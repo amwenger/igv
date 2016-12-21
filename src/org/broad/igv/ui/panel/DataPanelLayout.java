@@ -41,7 +41,7 @@ public class DataPanelLayout implements LayoutManager {
 
     int hgap = 5;   // TODO <= make this a function of # of panels
 
-    static Border panelBorder = BorderFactory.createLineBorder(Color.gray);
+    static Border panelBorder = BorderFactory.createEmptyBorder(0,0,0,0);
 
     public void addLayoutComponent(String s, Component component) {
         // Not used
