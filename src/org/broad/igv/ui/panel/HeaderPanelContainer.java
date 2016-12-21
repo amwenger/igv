@@ -95,7 +95,7 @@ public class HeaderPanelContainer extends JPanel implements Paintable {
             GeneList gl = IGV.getInstance().getSession().getCurrentGeneList();
             String name = gl.getDisplayName();
             JLabel label = new JLabel(name, JLabel.CENTER);
-            Border border = BorderFactory.createLineBorder(Color.lightGray);
+            Border border = BorderFactory.createEmptyBorder(0,0,0,0);
             label.setBorder(border);
             add(label, BorderLayout.NORTH);
         }

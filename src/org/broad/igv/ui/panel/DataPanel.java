@@ -462,7 +462,8 @@ public class DataPanel extends JComponent implements Paintable {
 
 
     private void init() {
-        setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
+        //setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
+        setBorder(javax.swing.BorderFactory.createEmptyBorder(0,0,0,0));
         setRequestFocusEnabled(false);
 
         // Key Events

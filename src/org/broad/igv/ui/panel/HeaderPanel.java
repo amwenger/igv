@@ -177,7 +177,7 @@ public class HeaderPanel extends JPanel implements Transferable {
         } else {
 
             JPanel panel = new JPanel();
-            setBorder(javax.swing.BorderFactory.createLineBorder(Color.gray));
+            setBorder(javax.swing.BorderFactory.createEmptyBorder(0,0,0,0));
             panel.setBackground(new java.awt.Color(255, 255, 255));
             panel.setMinimumSize(new java.awt.Dimension(700, 0));
             panel.setPreferredSize(new java.awt.Dimension(0, 0));

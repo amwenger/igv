@@ -188,14 +188,14 @@ public class MainPanel extends JPanel implements Paintable {
 
         nameHeaderPanel = new NameHeaderPanel();
         nameHeaderPanel.setBackground(new java.awt.Color(255, 255, 255));
-        nameHeaderPanel.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
+        nameHeaderPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(0,0,0,0));
         nameHeaderPanel.setMinimumSize(new java.awt.Dimension(0, 0));
         nameHeaderPanel.setPreferredSize(new java.awt.Dimension(0, 0));
         nameHeaderPanel.setLayout(new BorderLayout());
 
         attributeHeaderPanel = new AttributeHeaderPanel();
         attributeHeaderPanel.setBackground(new java.awt.Color(255, 255, 255));
-        attributeHeaderPanel.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(0, 0, 0)));
+        attributeHeaderPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(0,0,0,0));
         attributeHeaderPanel.setDebugGraphicsOptions(javax.swing.DebugGraphics.NONE_OPTION);
         attributeHeaderPanel.setMinimumSize(new java.awt.Dimension(0, 0));
         attributeHeaderPanel.setPreferredSize(new java.awt.Dimension(0, 0));
@@ -205,7 +205,7 @@ public class MainPanel extends JPanel implements Paintable {
 
 
         headerScrollPane = new JScrollPane();
-        headerScrollPane.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(102, 102, 102)));
+        headerScrollPane.setBorder(javax.swing.BorderFactory.createEmptyBorder(0,0,0,0));
         headerScrollPane.setForeground(new java.awt.Color(153, 153, 153));
         headerScrollPane.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         headerScrollPane.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
