@@ -61,7 +61,6 @@ import java.util.List;
 public class GlobalKeyDispatcher implements KeyEventDispatcher {
 
     private static Logger log = Logger.getLogger(GlobalKeyDispatcher.class);
-    private static int panelNumber = 0;
 
     private final InputMap inputMap = new InputMap();
     private final ActionMap actionMap = new ActionMap();
@@ -300,8 +299,8 @@ public class GlobalKeyDispatcher implements KeyEventDispatcher {
         final KeyStroke addPanelKeyMeta = KeyStroke.getKeyStroke(KeyEvent.VK_T, KeyEvent.META_MASK, false);
         final Action addPanelAction = new EnableWrappedAction(new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                panelNumber += 1;
-                igv.addDataPanel("Panel #" + Integer.toString(panelNumber));
+                String newPanelName = "Panel" + System.currentTimeMillis();
+                igv.addDataPanel(newPanelName);
             };
         });
         inputMap.put(addPanelKeyCtrl, "addPanel");
