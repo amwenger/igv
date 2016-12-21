@@ -217,13 +217,7 @@ public class TrackNamePanel extends TrackPanelComponent implements Paintable {
 
                     if (!isGrouped() || showSampleNamesWhenGrouped) {
                         Rectangle rect = new Rectangle(regionX, regionY, width, height);
-                        //Graphics2D g2D = graphics; //(Graphics2D) graphics.create();
-                        if (track.isSelected()) {
-                            graphics2D.setBackground(Color.LIGHT_GRAY);
-                            graphics2D.clearRect(rect.x, rect.y, rect.width, rect.height);
-                        } else {
-                            graphics2D.setBackground(backgroundColor);
-                        }
+                        graphics2D.setBackground(backgroundColor);
                         track.renderName(graphics2D, rect, visibleRect);
                     }
 
