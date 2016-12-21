@@ -131,7 +131,7 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
 
     int margin = DEFAULT_MARGIN;
 
-    private static boolean drawBorder = true;
+    private static boolean drawBorder = false;
 
     private boolean alternateExonColor = false;
 
