@@ -416,9 +416,9 @@ public class AlignmentPacker {
                 return al.isSupplementary() ? "SUPPLEMENTARY" : "";
             case BASE_AT_POS:
                 // Use a string prefix to enforce grouping rules:
-                //    1: alignments with a base at the position
-                //    2: alignments with a gap at the position
-                //    3: alignment that do not overlap the position (or are on a different chromosome)
+                //    $$1: alignments with a base at the position
+                //    $$2: alignments with a gap at the position
+                //    $$3: alignment that do not overlap the position (or are on a different chromosome)
 
                 if (al.getChr().equals(pos.getChr()) &&
                     al.getAlignmentStart() <= pos.getStart() &&
@@ -426,14 +426,14 @@ public class AlignmentPacker {
 
                     byte[] baseAtPos = new byte[] {al.getBase(pos.getStart())};
                     if (baseAtPos[0] == 0) { // gap at position
-                        return "2:";
+                        return "$$2:-";
                     }
                     else { // base at position
-                        return "1:" + new String(baseAtPos);
+                        return "$$1:" + new String(baseAtPos);
                     }
                 }
                 else { // does not overlap position
-                    return "3:";
+                    return "$$3:";
                 }
         }
         return null;

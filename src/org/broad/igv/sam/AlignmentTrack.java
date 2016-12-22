@@ -458,18 +458,23 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 }
 
                 // Label the group, if there is room
-
                 double groupHeight = rows.size() * h;
                 if (groupHeight > GROUP_LABEL_HEIGHT + 2) {
                     String groupName = entry.getKey();
-                    Graphics2D g = context.getGraphics2D("LABEL");
-                    FontMetrics fm = g.getFontMetrics();
-                    Rectangle2D stringBouds = fm.getStringBounds(groupName, g);
-                    Rectangle rect = new Rectangle(inputRect.x, (int) yGroup, (int) stringBouds.getWidth() + 10, (int) stringBouds.getHeight());
-                    GraphicUtils.drawVerticallyCenteredText(
-                            groupName, 5, rect, context.getGraphics2D("LABEL"), false, true);
+                    // Look for "special" group names used to group by base at position.
+                    if (groupName != null && groupName.length() >= 4 && groupName.startsWith("$$") && groupName.charAt(3)==':') {
+                        groupName = groupName.substring(4);
+                    }
+                    if (groupName != null && groupName.trim() != "") {
+                        Graphics2D g = context.getGraphics2D("LABEL");
+                        FontMetrics fm = g.getFontMetrics();
+                        Rectangle2D stringBouds = fm.getStringBounds(groupName, g);
+                        Rectangle rect = new Rectangle(inputRect.x, (int) yGroup, (int) stringBouds.getWidth() + 10, (int) stringBouds.getHeight());
+                        GraphicUtils.drawVerticallyCenteredText(
+                                groupName, 5, rect, context.getGraphics2D("LABEL"), false, true);
 
-                    groupNames.put(new Rectangle(inputRect.x, (int) yGroup, inputRect.width, (int) (y - yGroup)), groupName);
+                        groupNames.put(new Rectangle(inputRect.x, (int) yGroup, inputRect.width, (int) (y - yGroup)), groupName);
+                    }
                 }
 
             }
@@ -477,9 +482,6 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
 
         }
-
-        final int bottom = inputRect.y + inputRect.height;
-        groupBorderGraphics.drawLine(inputRect.x, bottom, inputRect.width, bottom);
     }
 
     /**
