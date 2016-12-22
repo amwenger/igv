@@ -231,7 +231,9 @@ public class TrackNamePanel extends TrackPanelComponent implements Paintable {
 
     private void init() {
         setBorder(javax.swing.BorderFactory.createEmptyBorder(0,0,0,0));
-        setBackground(new java.awt.Color(255, 255, 255));
+        final Color backgroundColor = PreferenceManager.getInstance().getAsColor(PreferenceManager.BACKGROUND_COLOR);
+        setBackground(backgroundColor);
+
         GroupLayout dataTrackNamePanelLayout = new org.jdesktop.layout.GroupLayout(this);
         setLayout(dataTrackNamePanelLayout);
         dataTrackNamePanelLayout.setHorizontalGroup(
