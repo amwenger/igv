@@ -946,11 +946,11 @@ public class TrackLoader {
             }
 
             AlignmentTrack alignmentTrack = new AlignmentTrack(locator, dataManager, genome);    // parser.loadTrack(locator, dsName);
-            alignmentTrack.setName(dsName);
+            alignmentTrack.setName("");
             alignmentTrack.setVisible(PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_SHOW_ALIGNMENT_TRACK));
 
             // Create coverage track
-            CoverageTrack covTrack = new CoverageTrack(locator, dsName + " Coverage", alignmentTrack, genome);
+            CoverageTrack covTrack = new CoverageTrack(locator, dsName.substring(0,dsName.length()-4), alignmentTrack, genome);
             covTrack.setVisible(PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_SHOW_COV_TRACK));
             newTracks.add(covTrack);
             covTrack.setDataManager(dataManager);
