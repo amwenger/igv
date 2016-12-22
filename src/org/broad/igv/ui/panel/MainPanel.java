@@ -69,7 +69,7 @@ public class MainPanel extends JPanel implements Paintable {
     private NameHeaderPanel nameHeaderPanel;
     private AttributeHeaderPanel attributeHeaderPanel;
 
-    private int hgap = 5;
+    private int hgap = 0;
     private JScrollPane headerScrollPane;
 
 
