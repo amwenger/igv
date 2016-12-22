@@ -91,7 +91,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     public static final int GROUP_LABEL_HEIGHT = 10;
     private static Logger log = Logger.getLogger(AlignmentTrack.class);
     static final int GROUP_MARGIN = 5;
-    static final int TOP_MARGIN = 20;
+    static final int TOP_MARGIN = 5;
     static final int DS_MARGIN_0 = 2;
     static final int DOWNAMPLED_ROW_HEIGHT = 3;
     static final int DS_MARGIN_2 = 5;
