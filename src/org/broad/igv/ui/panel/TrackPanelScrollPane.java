@@ -38,6 +38,8 @@ import java.awt.event.AdjustmentEvent;
 import java.awt.event.AdjustmentListener;
 import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 /**
  * @author jrobinso
@@ -49,6 +51,16 @@ public class TrackPanelScrollPane extends JideScrollPane implements Paintable {
     TrackPanel trackPanel;
     boolean isScrolling = false;
 
+    private javax.swing.Timer mouseWheelTimer = null;
+
+    private class MouseWheelEventActionListener implements ActionListener {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            mouseWheelTimer = null;
+            trackPanel.getNamePanel().repaint();
+        }
+    }
+
     public TrackPanelScrollPane() {
         setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(102, 102, 102)));
         setForeground(new java.awt.Color(153, 153, 153));
@@ -56,9 +68,15 @@ public class TrackPanelScrollPane extends JideScrollPane implements Paintable {
         setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         getVerticalScrollBar().setUnitIncrement(16);
 
+
         addMouseWheelListener(new MouseWheelListener() {
             public void mouseWheelMoved(MouseWheelEvent mouseWheelEvent) {
-                trackPanel.getNamePanel().repaint();
+                if (mouseWheelTimer != null && mouseWheelTimer.isRunning()) {
+                    mouseWheelTimer.stop();
+                }
+                mouseWheelTimer = new javax.swing.Timer(50, new MouseWheelEventActionListener());
+                mouseWheelTimer.setRepeats(false);
+                mouseWheelTimer.start();
             }
         });
 
