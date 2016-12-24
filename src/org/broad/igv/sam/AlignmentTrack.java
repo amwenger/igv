@@ -353,6 +353,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         alignmentsRect = new Rectangle(rect);
         alignmentsRect.y += DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_2;
         renderAlignments(context, alignmentsRect);
+        dataPanel.revalidate();
     }
 
     private void renderDownsampledIntervals(RenderContext context, Rectangle downsampleRect) {
