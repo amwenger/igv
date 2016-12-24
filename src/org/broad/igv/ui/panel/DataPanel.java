@@ -52,6 +52,8 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.List;
@@ -740,6 +742,17 @@ public class DataPanel extends JComponent implements Paintable {
             }
         }
 
+        private javax.swing.Timer mouseWheelTimer = null;
+        private MouseWheelEvent mouseWheelEvent = null;
+
+        private class MouseWheelEventActionListener implements ActionListener {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                mouseWheelTimer = null;
+                mouseWheelEvent.getComponent().getParent().dispatchEvent(mouseWheelEvent);
+            }
+        }
+
         /**
          * Zoom in/out when modifier + scroll wheel used
          *
@@ -760,8 +773,13 @@ public class DataPanel extends JComponent implements Paintable {
 //                System.out.println(e);
 //            }
             else {
-                //Default action if no modifier
-                e.getComponent().getParent().dispatchEvent(e);
+                // throttle the mouse wheel event
+                mouseWheelEvent = e;
+                if (mouseWheelTimer == null) {
+                    mouseWheelTimer = new javax.swing.Timer(17, new MouseWheelEventActionListener());
+                    mouseWheelTimer.setRepeats(false);
+                    mouseWheelTimer.start();
+                }
             }
         }
     }

@@ -102,7 +102,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     private boolean showGroupLine;
 
     public enum ShadeBasesOption {
-        NONE, QUALITY, FLOW_SIGNAL_DEVIATION_READ, FLOW_SIGNAL_DEVIATION_REFERENCE
+        NONE, QUALITY
     }
 
     public enum ExperimentType {
@@ -353,6 +353,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         alignmentsRect = new Rectangle(rect);
         alignmentsRect.y += DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_2;
         renderAlignments(context, alignmentsRect);
+        dataPanel.revalidate();
     }
 
     private void renderDownsampledIntervals(RenderContext context, Rectangle downsampleRect) {
@@ -499,18 +500,14 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
      * @param option
      * @see AlignmentDataManager#packAlignments
      */
-    public void groupAlignments(GroupOption option, String tag) {
-        if (tag != null) {
+    public void groupAlignments(GroupOption option, String tag, Range pos) {
+        if (option == GroupOption.TAG && tag != null) {
             renderOptions.setGroupByTag(tag);
         }
+        if (option == GroupOption.BASE_AT_POS && pos != null) {
+            renderOptions.setGroupByPos(pos);
+        }
         renderOptions.groupByOption = (option == GroupOption.NONE ? null : option);
-        dataManager.packAlignments(renderOptions);
-
-    }
-
-    public void groupAlignmentsByBaseAtPos(GroupOption option, Range pos) {
-        renderOptions.groupByOption = GroupOption.BASE_AT_POS;
-        renderOptions.setGroupByBaseAtPos(pos);
         dataManager.packAlignments(renderOptions);
     }
 
@@ -791,7 +788,9 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 break;
             case RELOAD:
                 clearCaches();
+            case REFRESH:
                 setRenderOptions(new RenderOptions());
+                refresh();
                 break;
         }
 
@@ -1017,7 +1016,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
         BisulfiteContext bisulfiteContext;
 
-        private Range groupByBaseAtPos = null;
+        private Range groupByPos = null;
 
         RenderOptions() {
             PreferenceManager prefs = PreferenceManager.getInstance();
@@ -1040,7 +1039,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             showAllBases = prefs.getAsBoolean(PreferenceManager.SAM_SHOW_ALL_BASES);
             quickConsensusMode = prefs.getAsBoolean(PreferenceManager.SAM_QUICK_CONSENSUS_MODE);
             colorOption = CollUtils.valueOf(ColorOption.class, prefs.get(PreferenceManager.SAM_COLOR_BY), ColorOption.NONE);
-            groupByOption = null;
+            groupByOption = CollUtils.valueOf(GroupOption.class, prefs.get(PreferenceManager.SAM_GROUP_OPTION), GroupOption.NONE);
             flagZeroQualityAlignments = prefs.getAsBoolean(PreferenceManager.SAM_FLAG_ZERO_QUALITY);
             bisulfiteContext = DEFAULT_BISULFITE_CONTEXT;
 
@@ -1048,6 +1047,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             colorByTag = prefs.get(PreferenceManager.SAM_COLOR_BY_TAG);
             sortByTag = prefs.get(PreferenceManager.SAM_SORT_BY_TAG);
             groupByTag = prefs.get(PreferenceManager.SAM_GROUP_BY_TAG);
+            setGroupByPos(prefs.get(PreferenceManager.SAM_GROUP_BY_POS));
 
             //updateColorScale();
 
@@ -1167,12 +1167,28 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             this.groupByTag = groupByTag;
         }
 
-        public Range getGroupByBaseAtPos() {
-            return groupByBaseAtPos;
+        public Range getGroupByPos() {
+            return groupByPos;
         }
 
-        public void setGroupByBaseAtPos(Range groupByBaseAtPos) {
-            this.groupByBaseAtPos = groupByBaseAtPos;
+        public void setGroupByPos(Range groupByPos) {
+            this.groupByPos = groupByPos;
+        }
+
+        public void setGroupByPos(String pos) {
+            if (pos == null) {
+                this.groupByPos = null;
+            }
+            else {
+                String[] posParts = pos.split(" ");
+                if (posParts.length != 2) {
+                    this.groupByPos = null;
+                }
+                else {
+                    int posChromStart = Integer.valueOf(posParts[1]);
+                    this.groupByPos = new Range(posParts[0], posChromStart, posChromStart+1);
+                }
+            }
         }
 
         public String getLinkByTag() {
@@ -1400,7 +1416,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             mi.addActionListener(new ActionListener() {
 
                 public void actionPerformed(ActionEvent aEvt) {
-                    IGV.getInstance().groupAlignmentTracks(option, null);
+                    IGV.getInstance().groupAlignmentTracks(option, null, null);
                     refresh();
 
                 }
@@ -1446,9 +1462,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 public void actionPerformed(ActionEvent aEvt) {
                     String tag = MessageUtils.showInputDialog("Enter tag", renderOptions.getGroupByTag());
                     if (tag != null && tag.trim().length() > 0) {
-                        renderOptions.setGroupByTag(tag);
-                        IGV.getInstance().groupAlignmentTracks(GroupOption.TAG, tag);
-                        refresh();
+                        IGV.getInstance().groupAlignmentTracks(GroupOption.TAG, tag, null);
                     }
 
                 }
@@ -1457,29 +1471,26 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             groupMenu.add(tagOption);
             group.add(tagOption);
 
-            Range oldSortByBaseAtPos = renderOptions.getGroupByBaseAtPos();
+            Range oldGroupByPos = renderOptions.getGroupByPos();
             if (renderOptions.groupByOption == GroupOption.BASE_AT_POS) { // already sorted by the base at a position
-                JCheckBoxMenuItem oldBaseAtPosOption = new JCheckBoxMenuItem("base at " + oldSortByBaseAtPos.getChr() +
-                        ":" + Globals.DECIMAL_FORMAT.format(1 + oldSortByBaseAtPos.getStart()));
-                groupMenu.add(oldBaseAtPosOption);
-                oldBaseAtPosOption.setSelected(true);
+                JCheckBoxMenuItem oldGroupByPosOption = new JCheckBoxMenuItem("base at " + oldGroupByPos.getChr() +
+                        ":" + Globals.DECIMAL_FORMAT.format(1 + oldGroupByPos.getStart()));
+                groupMenu.add(oldGroupByPosOption);
+                oldGroupByPosOption.setSelected(true);
             }
 
-            if (renderOptions.groupByOption != GroupOption.BASE_AT_POS || oldSortByBaseAtPos == null ||
-                    !oldSortByBaseAtPos.getChr().equals(chrom) || oldSortByBaseAtPos.getStart() != chromStart) { // not already sorted by this position
-                JCheckBoxMenuItem newBaseAtPosOption = new JCheckBoxMenuItem("base at " + chrom +
+            if (renderOptions.groupByOption != GroupOption.BASE_AT_POS || oldGroupByPos == null ||
+                    !oldGroupByPos.getChr().equals(chrom) || oldGroupByPos.getStart() != chromStart) { // not already sorted by this position
+                JCheckBoxMenuItem newGroupByPosOption = new JCheckBoxMenuItem("base at " + chrom +
                         ":" + Globals.DECIMAL_FORMAT.format(1 + chromStart));
-                newBaseAtPosOption.addActionListener(new ActionListener() {
+                newGroupByPosOption.addActionListener(new ActionListener() {
                     public void actionPerformed(ActionEvent aEvt) {
-                        renderOptions.groupByOption = GroupOption.BASE_AT_POS;
-                        Range groupByBaseAtPos = new Range(chrom, chromStart, chromStart + 1);
-                        renderOptions.setGroupByBaseAtPos(groupByBaseAtPos);
-                        IGV.getInstance().groupAlignmentTracksByBaseAtPos(GroupOption.BASE_AT_POS, groupByBaseAtPos);
-                        refresh();
+                        Range groupByPos = new Range(chrom, chromStart, chromStart + 1);
+                        IGV.getInstance().groupAlignmentTracks(GroupOption.BASE_AT_POS, null, groupByPos);
                     }
                 });
-                groupMenu.add(newBaseAtPosOption);
-                group.add(newBaseAtPosOption);
+                groupMenu.add(newGroupByPosOption);
+                group.add(newGroupByPosOption);
             }
 
             add(groupMenu);
@@ -1864,8 +1875,6 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 Map<String, ShadeBasesOption> mappings = new LinkedHashMap<String, ShadeBasesOption>();
                 mappings.put("none", ShadeBasesOption.NONE);
                 mappings.put("quality", ShadeBasesOption.QUALITY);
-                mappings.put("read flow signal deviation", ShadeBasesOption.FLOW_SIGNAL_DEVIATION_READ);
-                mappings.put("reference flow signal deviation", ShadeBasesOption.FLOW_SIGNAL_DEVIATION_REFERENCE);
 
                 for (Map.Entry<String, ShadeBasesOption> el : mappings.entrySet()) {
                     JCheckBoxMenuItem mi = getShadeBasesMenuItem(el.getKey(), el.getValue());
