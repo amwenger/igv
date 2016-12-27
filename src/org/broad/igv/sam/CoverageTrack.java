@@ -216,7 +216,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
             dataSourceRenderer.renderBorder(this, context, rect);
             dataSourceRenderer.renderAxis(this, context, rect);
         } else {
-            DataRenderer.drawScale(this.getDataRange(), context, rect);
+            DataRenderer.drawScale(this.getDataRange(), context, rect, true);
         }
     }
 
@@ -337,7 +337,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
     }
 
     public void drawScale(RenderContext context, Rectangle rect) {
-        DataRenderer.drawScale(getDataRange(), context, rect);
+        DataRenderer.drawScale(getDataRange(), context, rect, true);
     }
 
     public boolean isLogNormalized() {

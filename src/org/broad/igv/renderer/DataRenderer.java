@@ -138,15 +138,26 @@ public abstract class DataRenderer implements Renderer<LocusScore> {
      * @param arect
      */
     public static void drawScale(DataRange range, RenderContext context, Rectangle arect){
+        drawScale(range, context, arect, false);
+    }
+
+    public static void drawScale(DataRange range, RenderContext context, Rectangle arect, boolean intScale){
         if (range != null) {
             Graphics2D g = context.getGraphic2DForColor(Color.black);
             Font font = g.getFont();
             Font smallFont = FontManager.getFont(8);
             try {
                 g.setFont(smallFont);
-                String minString = range.getMinimum() == 0f ? "0" : String.format("%.3f", range.getMinimum());
-                String fmtString = range.getMaximum() > 10 ? "%.0f" : "%.2f";
-                String maxString = String.format(fmtString, range.getMaximum());
+                String minString = "", maxString = "";
+                if (intScale) {
+                    minString = String.format("%.0f", range.getMinimum());
+                    maxString = String.format("%.0f", range.getMaximum());
+                }
+                else {
+                    minString = range.getMinimum() == 0f ? "0" : String.format("%.3f", range.getMinimum());
+                    String fmtString = range.getMaximum() > 10 ? "%.0f" : "%.2f";
+                    maxString = String.format(fmtString, range.getMaximum());
+                }
                 String scale = "[" + minString + " - " + maxString + "]";
                 g.drawString(scale, arect.x + 5, arect.y + 10);
 
