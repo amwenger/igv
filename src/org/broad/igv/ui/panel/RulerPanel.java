@@ -222,8 +222,7 @@ public class RulerPanel extends JPanel {
         while (x < getWidth()) {
             l = (int) (nTick * spacing);
             x = frame.getScreenPosition(l - 1 + 0.5);
-            String chrPosition = formatNumber((double) l / ts.getUnitMultiplier()) +
-                    " " + ts.getMajorUnit();
+            String chrPosition = formatNumber((double) l);
             int strWidth = g.getFontMetrics().stringWidth(chrPosition);
             int strPosition = x - strWidth / 2;
             //if (strPosition > strEnd) {
