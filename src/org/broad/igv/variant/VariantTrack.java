@@ -538,7 +538,7 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
             tmpRect.height = variantBandHeight;
             tmpRect.y = trackRectangle.y;
             g2D.setColor(Color.gray);
-            GraphicUtils.drawCenteredText("No Variants Found", trackRectangle, g2D);
+            //GraphicUtils.drawCenteredText("No Variants Found", trackRectangle, g2D);
         }
 
         renderBoundaryLines(g2D, trackRectangle, visibleRectangle);
