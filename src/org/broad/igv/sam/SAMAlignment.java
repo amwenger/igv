@@ -42,6 +42,7 @@ import java.util.*;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.text.DecimalFormat;
 
 /**
  * @author jrobinso
@@ -483,13 +484,33 @@ public abstract class SAMAlignment implements Alignment {
                         if (bases == null) {
                             buf.append("Insertion: " + block.getLength() + " bases");
                         } else {
-                            if (bases.length < 50) {
-                                buf.append( "Insertion: " + new String(bases));
-                            } else {
-                                int len = bases.length;
-                                buf.append( "Insertion: " + new String(Arrays.copyOfRange(bases, 0, 25)) + "..." +
-                                        new String(Arrays.copyOfRange(bases, len - 25, len)));
+                            int a = 0, c = 0, g = 0, t = 0;
+                            for (int i = 0; i < bases.length; i++) {
+                                switch (bases[i]) {
+                                    case 'A': case 'a': a++; break;
+                                    case 'C': case 'c': c++; break;
+                                    case 'G': case 'g': g++; break;
+                                    case 'T': case 't': t++; break;
+                                }
                             }
+                            int len = bases.length;
+
+                            double pa = (double) a / (double) len, pc = (double) c/ (double) len,
+                                   pg = (double) g / (double) len, pt = (double) t/ (double) len;
+                            double H = ((pa == 0 ? 0 : -pa*Math.log(pa)) + (pc == 0 ? 0 : -pc*Math.log(pc)) +
+                                      (pg == 0 ? 0 : -pg*Math.log(pg)) + (pt == 0 ? 0 : -pt*Math.log(pt))) / Math.log(2);
+
+                            DecimalFormat Hformatter = new DecimalFormat("#0.00");
+                            buf.append(Globals.DECIMAL_FORMAT.format(len) + "I = " +
+                                Globals.DECIMAL_FORMAT.format(a) + "A + " +
+                                Globals.DECIMAL_FORMAT.format(c) + "C + " +
+                                Globals.DECIMAL_FORMAT.format(g) + "G + " +
+                                Globals.DECIMAL_FORMAT.format(t) + "T = " + Hformatter.format(H) + " bits" +
+                                "<br>" +
+                                (len < 50 ?
+                                    new String(bases) :
+                                    new String(Arrays.copyOfRange(bases, 0, 25)) + "..." + new String(Arrays.copyOfRange(bases, len - 25, len))
+                                ));
                         }
                     return buf.toString();
                 }
