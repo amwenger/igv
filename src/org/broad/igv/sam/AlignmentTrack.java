@@ -162,7 +162,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
     private RenderOptions renderOptions = new RenderOptions();
 
-    private int expandedHeight = 14;
+    private int expandedHeight = 13;
     private int maxSquishedHeight = 5;
     private int squishedHeight = maxSquishedHeight;
     private FeatureRenderer renderer;
