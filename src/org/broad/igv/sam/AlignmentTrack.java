@@ -406,19 +406,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         // Divide rectangle into equal height levels
         double y = inputRect.getY();
         double h;
-        if (getDisplayMode() == DisplayMode.EXPANDED) {
-            h = expandedHeight;
-        } else {
-
-            int visHeight = visibleRect.height;
-            int depth = dataManager.getNLevels();
-            if (depth == 0) {
-                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, expandedHeight));
-            } else {
-                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, Math.min(expandedHeight, visHeight / depth)));
-            }
-            h = squishedHeight;
-        }
+        h = (getDisplayMode() == DisplayMode.EXPANDED) ? expandedHeight : squishedHeight;
 
         // Loop through groups
         Graphics2D groupBorderGraphics = context.getGraphic2DForColor(AlignmentRenderer.GROUP_DIVIDER_COLOR);
