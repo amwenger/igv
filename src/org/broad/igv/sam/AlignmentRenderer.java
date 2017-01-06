@@ -72,6 +72,9 @@ public class AlignmentRenderer implements FeatureRenderer {
 
     // Indel colors
     private static Color purple = new Color(118, 24, 220);
+    private static Color purple1 = purple;
+    private static Color purple2 = new Color(218, 112, 214);
+    private static Color purple3 = new Color(223, 111, 161);
     private static Color deletionColor = Color.black;
     private static Color skippedColor = new Color(150, 184, 200);
     private static Color unknownGapColor = new Color(0, 150, 0);
@@ -993,7 +996,39 @@ public class AlignmentRenderer implements FeatureRenderer {
                 pxRight = pxLeft + pxW;
 
         // Draw the label
-        g.setColor(isInsertion ? purple : Color.white);
+        Color bgColor;
+        if (!isInsertion) {
+            bgColor = Color.white;
+        }
+        else {
+            byte[] bases = insertionBlock.getBases();
+            // Characterize the basepair content of the insertion.
+            int ctA = 0, ctC = 0, ctG = 0, ctT = 0, ctAll = 0;
+            for (int i = 0; i < bases.length; i++) {
+                switch (bases[i]) {
+                    case 'A': case 'a': ctA++; break;
+                    case 'C': case 'c': ctC++; break;
+                    case 'G': case 'g': ctG++; break;
+                    case 'T': case 't': ctT++; break;
+                }
+            }
+            ctAll = ctA + ctC + ctG + ctT;
+
+            double bpFractions[] = {(double) ctA / (double) ctAll, (double) ctC / (double) ctAll,
+                (double) ctG / (double) ctAll, (double) ctT / (double) ctAll};
+            Arrays.sort(bpFractions);
+
+            if ((bpFractions[3] >= 0.7) || (bpFractions[2] + bpFractions[3] >= 0.8)) { // extreme bias
+                bgColor = purple3;
+            }
+            else if (bpFractions[0] < 0.1) { // moderate bias that excludes one base
+                bgColor = purple2;
+            }
+            else {
+                bgColor = purple1;
+            }
+        }
+        g.setColor(bgColor);
         g.fillRect(pxLeft, pxTop, pxRight - pxLeft, pxH);
 
         if (isInsertion) {
