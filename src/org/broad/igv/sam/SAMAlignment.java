@@ -468,6 +468,19 @@ public abstract class SAMAlignment implements Alignment {
         return getValueStringImpl(position, mouseX, true);
     }
 
+    private String lineWrapString(String input, int maxCharsPerLine) {
+        int lines = input.length() / maxCharsPerLine + 1;
+        if (lines == 1) return input;
+
+        String result = input.substring(0, maxCharsPerLine);
+        for (int lineNum = 1; lineNum < lines; lineNum++) {
+            int start = lineNum * maxCharsPerLine;
+            int end = Math.min(start + maxCharsPerLine, input.length());
+            result += "<br/>" + input.substring(start, end);
+        }
+        return result;
+    }
+
     private String getValueStringImpl(double position, int mouseX, boolean truncate) {
 
         int basePosition = (int) position;
@@ -499,16 +512,14 @@ public abstract class SAMAlignment implements Alignment {
                                    pg = (double) g / (double) len, pt = (double) t/ (double) len;
                             DecimalFormat Pformatter = new DecimalFormat("#0.0");
 
-                            buf.append(Globals.DECIMAL_FORMAT.format(len) + "bp insertion<br><br>" +
-                                "A " + new String(new char[(int) (pa*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(a) + " (" + Pformatter.format(pa*100)  + "%)<br>" +
-                                "C " + new String(new char[(int) (pc*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(c) + " (" + Pformatter.format(pc*100)  + "%)<br>" +
-                                "G " + new String(new char[(int) (pg*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(g) + " (" + Pformatter.format(pg*100)  + "%)<br>" +
-                                "T " + new String(new char[(int) (pt*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(t) + " (" + Pformatter.format(pt*100)  + "%)<br>" +
-                                "<br>" +
-                                (len < 50 ?
-                                    new String(bases) :
-                                    new String(Arrays.copyOfRange(bases, 0, 25)) + "..." + new String(Arrays.copyOfRange(bases, len - 25, len))
-                                ));
+                            buf.append(Globals.DECIMAL_FORMAT.format(len) + "bp insertion<br>" +
+                                "<pre>" +
+                                "A " + new String(new char[(int) (pa*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(a) + " (" + Pformatter.format(pa*100)  + "%)\n" +
+                                "C " + new String(new char[(int) (pc*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(c) + " (" + Pformatter.format(pc*100)  + "%)\n" +
+                                "G " + new String(new char[(int) (pg*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(g) + " (" + Pformatter.format(pg*100)  + "%)\n" +
+                                "T " + new String(new char[(int) (pt*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(t) + " (" + Pformatter.format(pt*100)  + "%)\n" +
+                                "</pre>" +
+                                "<pre>" + lineWrapString(new String(bases), 80) + "</pre>");
                         }
                     return buf.toString();
                 }
