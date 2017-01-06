@@ -497,15 +497,13 @@ public abstract class SAMAlignment implements Alignment {
 
                             double pa = (double) a / (double) len, pc = (double) c/ (double) len,
                                    pg = (double) g / (double) len, pt = (double) t/ (double) len;
-                            double H = ((pa == 0 ? 0 : -pa*Math.log(pa)) + (pc == 0 ? 0 : -pc*Math.log(pc)) +
-                                      (pg == 0 ? 0 : -pg*Math.log(pg)) + (pt == 0 ? 0 : -pt*Math.log(pt))) / Math.log(2);
+                            DecimalFormat Pformatter = new DecimalFormat("#0.0");
 
-                            DecimalFormat Hformatter = new DecimalFormat("#0.00");
-                            buf.append(Globals.DECIMAL_FORMAT.format(len) + "I = " +
-                                Globals.DECIMAL_FORMAT.format(a) + "A + " +
-                                Globals.DECIMAL_FORMAT.format(c) + "C + " +
-                                Globals.DECIMAL_FORMAT.format(g) + "G + " +
-                                Globals.DECIMAL_FORMAT.format(t) + "T = " + Hformatter.format(H) + " bits" +
+                            buf.append(Globals.DECIMAL_FORMAT.format(len) + "bp insertion<br><br>" +
+                                "A " + new String(new char[(int) (pa*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(a) + " (" + Pformatter.format(pa*100)  + "%)<br>" +
+                                "C " + new String(new char[(int) (pc*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(c) + " (" + Pformatter.format(pc*100)  + "%)<br>" +
+                                "G " + new String(new char[(int) (pg*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(g) + " (" + Pformatter.format(pg*100)  + "%)<br>" +
+                                "T " + new String(new char[(int) (pt*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(t) + " (" + Pformatter.format(pt*100)  + "%)<br>" +
                                 "<br>" +
                                 (len < 50 ?
                                     new String(bases) :
