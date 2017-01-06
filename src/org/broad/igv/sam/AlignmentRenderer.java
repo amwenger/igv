@@ -975,7 +975,7 @@ public class AlignmentRenderer implements FeatureRenderer {
                                      int pxTop, int pxH, int pxWmax, AlignmentBlock insertionBlock) {
 
         final int pxPad = 2;   // text padding in the label
-        final int pxWing = (pxH > 10 ? 2 : 1);  // width of the cursor "wing"
+        final int pxWing = (pxH > 10) ? 2 : (pxH > 5 ? 1 : 0); // width of the cursor "wing"
         final int minTextHeight = 8; // min height to draw text
 
         // Calculate the width required to draw the label
@@ -996,7 +996,7 @@ public class AlignmentRenderer implements FeatureRenderer {
         g.setColor(isInsertion ? purple : Color.white);
         g.fillRect(pxLeft, pxTop, pxRight - pxLeft, pxH);
 
-        if (isInsertion && pxH > 5) {
+        if (isInsertion) {
             g.fillRect(pxLeft - pxWing, pxTop, pxRight - pxLeft + 2 * pxWing, 2);
             g.fillRect(pxLeft - pxWing, pxTop + pxH - 2, pxRight - pxLeft + 2 * pxWing, 2);
         } // draw "wings" For insertions
@@ -1030,7 +1030,8 @@ public class AlignmentRenderer implements FeatureRenderer {
 
             for (AlignmentBlock aBlock : insertions) {
                 int x = (int) ((aBlock.getStart() - origin) / locScale);
-                int bpWidth = aBlock.getBases().length;
+                byte[] bases = aBlock.getBases();
+                int bpWidth = bases.length;
                 double pxWidthExact = ((double) bpWidth) / locScale;
                 int h = (int) Math.max(1, rect.getHeight() - (leaveMargin ? 2 : 0));
                 int y = (int) (rect.getY() + (rect.getHeight() - h) / 2) - (leaveMargin ? 1 : 0);
@@ -1044,18 +1045,8 @@ public class AlignmentRenderer implements FeatureRenderer {
 
                 if ((!hideSmallIndelsBP || bpWidth >= indelThresholdBP) &&
                         (!quickConsensus || alignmentCounts.isConsensusInsertion(aBlock.getStart(), snpThreshold))) {
-                    if (flagLargeIndels && bpWidth > largeInsertionsThreshold) {
-                        drawLargeIndelLabel(context.getGraphics2D("INDEL_LABEL"), true, Globals.DECIMAL_FORMAT.format(bpWidth), x - 1, y, h, (int) pxWidthExact, aBlock);
-                    } else {
-                        int pxWing = (h > 10 ? 2 : (h > 5) ? 1 : 0);
-                        Graphics2D g = context.getGraphics();
-                        g.setColor(purple);
-                        g.fillRect(x, y, 2, h);
-                        g.fillRect(x - pxWing, y, 2 + 2*pxWing, 2);
-                        g.fillRect(x - pxWing, y + h - 2, 2 + 2*pxWing, 2);
-
-                        aBlock.setPixelRange(x - pxWing, x + 2 + pxWing);
-                    }
+                    int labelWidth = (flagLargeIndels && bpWidth > largeInsertionsThreshold) ? (int) pxWidthExact : 2;
+                    drawLargeIndelLabel(context.getGraphics2D("INDEL_LABEL"), true, Globals.DECIMAL_FORMAT.format(bpWidth), x - 1, y, h, labelWidth, aBlock);
                 }
             }
         }
