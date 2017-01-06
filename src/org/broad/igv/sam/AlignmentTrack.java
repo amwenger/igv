@@ -163,6 +163,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     private RenderOptions renderOptions = new RenderOptions();
 
     private int expandedHeight = 13;
+    private int collapsedHeight = 9;
     private int maxSquishedHeight = 5;
     private int squishedHeight = maxSquishedHeight;
     private FeatureRenderer renderer;
@@ -309,7 +310,15 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     }
 
     private int getRowHeight() {
-        return getDisplayMode() == DisplayMode.EXPANDED ? expandedHeight : squishedHeight;
+        if (getDisplayMode() == DisplayMode.EXPANDED) {
+            return expandedHeight;
+        }
+        else if (getDisplayMode() == DisplayMode.COLLAPSED) {
+            return collapsedHeight;
+        }
+        else {
+            return squishedHeight;
+        }
     }
 
     private int getNLevels() {
@@ -398,7 +407,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         }
 
         Rectangle visibleRect = context.getVisibleRect();
-        final boolean leaveMargin = getDisplayMode() == DisplayMode.EXPANDED;
+        final boolean leaveMargin = (getDisplayMode() != DisplayMode.SQUISHED);
 
 
         maximumHeight = Integer.MAX_VALUE;
@@ -406,7 +415,24 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         // Divide rectangle into equal height levels
         double y = inputRect.getY();
         double h;
-        h = (getDisplayMode() == DisplayMode.EXPANDED) ? expandedHeight : squishedHeight;
+
+        if (getDisplayMode() == DisplayMode.EXPANDED) {
+            h = expandedHeight;
+        }
+        else if (getDisplayMode() == DisplayMode.COLLAPSED) {
+            h = collapsedHeight;
+        }
+        else {
+
+            int visHeight = visibleRect.height;
+            int depth = dataManager.getNLevels();
+            if (depth == 0) {
+                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, expandedHeight));
+            } else {
+                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, Math.min(expandedHeight, visHeight / depth)));
+            }
+            h = squishedHeight;
+        }
 
         // Loop through groups
         Graphics2D groupBorderGraphics = context.getGraphic2DForColor(AlignmentRenderer.GROUP_DIVIDER_COLOR);

@@ -552,13 +552,13 @@ public class AlignmentRenderer implements FeatureRenderer {
 
         boolean leftmost = (blockChromStart == alignmentChromStart),
                 rightmost = (blockChromEnd == alignmentChromEnd),
-                tallEnoughForArrow = h > 8;
+                tallEnoughForArrow = h > 6;
 
         if (h == 1) {
             blockGraphics.drawLine(blockPxStart, y, blockPxEnd, y);
         } else {
             Shape blockShape;
-            int arrowPxWidth = Math.min(5, blockPxWidth / 6);
+            int arrowPxWidth = Math.min(Math.min(5,h/2), blockPxWidth / 6);
             if (!overlapped) {
                 int delta = Math.max(0, (int) (arrowPxWidth + 1 - AlignmentPacker.MIN_ALIGNMENT_SPACING / locSale));
                 if (leftmost && isNegativeStrand && tallEnoughForArrow) blockPxStart += delta;
@@ -586,11 +586,11 @@ public class AlignmentRenderer implements FeatureRenderer {
             }
             if (leftmost && leftClipped) {
                 clippedGraphics.drawLine(xPoly[0], yPoly[0], xPoly[1], yPoly[1]);
-                clippedGraphics.drawLine(xPoly[5], yPoly[5], xPoly[0], yPoly[0]);
+                clippedGraphics.drawLine(xPoly[5], yPoly[5]-1, xPoly[0], yPoly[0]);
             }
             if (rightmost && rightClipped) {
                 clippedGraphics.drawLine(xPoly[2], yPoly[2], xPoly[3], yPoly[3]);
-                clippedGraphics.drawLine(xPoly[3], yPoly[3], xPoly[4], yPoly[4]);
+                clippedGraphics.drawLine(xPoly[3], yPoly[3], xPoly[4], yPoly[4]-1);
             }
         }
     }
@@ -658,7 +658,7 @@ public class AlignmentRenderer implements FeatureRenderer {
         // Get a graphics context for drawing clipping indicators.
         Graphics2D clippedGraphics = context.getGraphic2DForColor(clippedColor);
         if (h > 5) {
-            clippedGraphics.setStroke(new BasicStroke(1.5f));
+            clippedGraphics.setStroke(new BasicStroke(1.2f));
         }
 
         // Get a graphics context for drawing strand indicators.
@@ -666,13 +666,13 @@ public class AlignmentRenderer implements FeatureRenderer {
 
         // Define a graphics context for indel labels.
         Graphics2D largeIndelGraphics = context.getGraphics2D("INDEL_LABEL");
-        largeIndelGraphics.setFont(FontManager.getFont(Font.BOLD, h - 2));
+        largeIndelGraphics.setFont(FontManager.getFont(Font.BOLD, h-2));
 
         // Get a graphics context for drawing individual basepairs.
         Graphics2D bpGraphics = context.getGraphics2D("BASE");
         int dX = (int) Math.max(1, (1.0 / locScale));
         if (dX >= 8) {
-            Font f = FontManager.getFont(Font.BOLD, Math.min(dX, 12));
+            Font f = FontManager.getFont(Font.BOLD, Math.min(dX, h));
             bpGraphics.setFont(f);
         }
 
@@ -783,7 +783,7 @@ public class AlignmentRenderer implements FeatureRenderer {
                         break; // done examining blocks
                     }
 
-                    drawBases(context, bpGraphics, rowRect, alignment, aBlock, alignmentCounts, alignmentColor, renderOptions);
+                    drawBases(context, bpGraphics, rowRect, alignment, aBlock, alignmentCounts, alignmentColor, leaveMargin, renderOptions);
                 }
             }
         }
@@ -800,6 +800,7 @@ public class AlignmentRenderer implements FeatureRenderer {
      * @param block
      * @param alignmentCounts
      * @param alignmentColor
+     * @param leaveMargin
      * @param renderOptions
      */
     private void drawBases(RenderContext context,
@@ -809,6 +810,7 @@ public class AlignmentRenderer implements FeatureRenderer {
                            AlignmentBlock block,
                            AlignmentCounts alignmentCounts,
                            Color alignmentColor,
+                           boolean leaveMargin,
                            RenderOptions renderOptions) {
 
         boolean isSoftClipped = block.isSoftClipped();
@@ -902,7 +904,7 @@ public class AlignmentRenderer implements FeatureRenderer {
                         // In "quick consensus" mode, only show mismatches at positions with a consistent alternative basepair.
                         (!quickConsensus || alignmentCounts.isConsensusMismatch(loc, reference[idx], chr, snpThreshold))
                         ) {
-                    drawBase(g, color, c, pX, pY, dX, dY, bisulfiteMode, bisstatus);
+                    drawBase(g, color, c, pX, pY, dX, dY - (leaveMargin ? 2 : 0), bisulfiteMode, bisstatus);
                 }
             }
         }
@@ -925,9 +927,9 @@ public class AlignmentRenderer implements FeatureRenderer {
      */
     private void drawBase(Graphics2D g, Color color, char c, int pX, int pY, int dX, int dY, boolean bisulfiteMode,
                           DisplayStatus bisstatus) {
-        if (((dY >= 12) && (dX >= 8)) && (!bisulfiteMode || (bisulfiteMode && bisstatus.equals(DisplayStatus.CHARACTER)))) {
+        if (((dY >= 12) && (dX >= dY)) && (!bisulfiteMode || (bisulfiteMode && bisstatus.equals(DisplayStatus.CHARACTER)))) {
             g.setColor(color);
-            GraphicUtils.drawCenteredText(new char[]{c}, pX, pY + 1, dX, dY - 2, g);
+            GraphicUtils.drawCenteredText(new char[]{c}, pX, pY, dX, dY, g);
         } else {
 
             int pX0i = pX, dXi = dX;
@@ -945,11 +947,7 @@ public class AlignmentRenderer implements FeatureRenderer {
 
             if (color != null) {
                 g.setColor(color);
-                if (dY < 10) {
-                    g.fillRect(pX0i, pY, dXi, dY);
-                } else {
-                    g.fillRect(pX0i, pY + 1, dW, dY - 3);
-                }
+                g.fillRect(pX0i, pY, dXi, dY);
             }
         }
     }
@@ -977,7 +975,7 @@ public class AlignmentRenderer implements FeatureRenderer {
                                      int pxTop, int pxH, int pxWmax, AlignmentBlock insertionBlock) {
 
         final int pxPad = 2;   // text padding in the label
-        final int pxWing = 2;  // width of the cursor "wing"
+        final int pxWing = (pxH > 10 ? 2 : 1);  // width of the cursor "wing"
         final int minTextHeight = 8; // min height to draw text
 
         // Calculate the width required to draw the label
@@ -998,7 +996,6 @@ public class AlignmentRenderer implements FeatureRenderer {
         g.setColor(isInsertion ? purple : Color.white);
         g.fillRect(pxLeft, pxTop, pxRight - pxLeft, pxH);
 
-        // TODO -- record this "object" for popup text
         if (isInsertion && pxH > 5) {
             g.fillRect(pxLeft - pxWing, pxTop, pxRight - pxLeft + 2 * pxWing, 2);
             g.fillRect(pxLeft - pxWing, pxTop + pxH - 2, pxRight - pxLeft + 2 * pxWing, 2);
@@ -1006,7 +1003,7 @@ public class AlignmentRenderer implements FeatureRenderer {
 
         if (doesTextFit) {
             g.setColor(isInsertion ? Color.white : purple);
-            g.drawString(labelText, pxLeft + pxPad, pxTop + pxH - 2);
+            GraphicUtils.drawCenteredText(labelText, pxLeft, pxTop, pxW, pxH, g);
         } // draw the text if it fits
 
         if (insertionBlock != null) insertionBlock.setPixelRange(pxLeft, pxRight);
@@ -1050,14 +1047,14 @@ public class AlignmentRenderer implements FeatureRenderer {
                     if (flagLargeIndels && bpWidth > largeInsertionsThreshold) {
                         drawLargeIndelLabel(context.getGraphics2D("INDEL_LABEL"), true, Globals.DECIMAL_FORMAT.format(bpWidth), x - 1, y, h, (int) pxWidthExact, aBlock);
                     } else {
-
+                        int pxWing = (h > 10 ? 2 : (h > 5) ? 1 : 0);
                         Graphics2D g = context.getGraphics();
                         g.setColor(purple);
-                        g.fillRect(x - 2, y, 4, 2);
-                        g.fillRect(x - 1, y, 2, h);
-                        g.fillRect(x - 2, y + h - 2, 4, 2);
+                        g.fillRect(x, y, 2, h);
+                        g.fillRect(x - pxWing, y, 2 + 2*pxWing, 2);
+                        g.fillRect(x - pxWing, y + h - 2, 2 + 2*pxWing, 2);
 
-                        aBlock.setPixelRange(x - 2, x + 4);
+                        aBlock.setPixelRange(x - pxWing, x + 2 + pxWing);
                     }
                 }
             }
