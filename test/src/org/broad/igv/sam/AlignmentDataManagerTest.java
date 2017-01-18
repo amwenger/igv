@@ -65,56 +65,42 @@ public class AlignmentDataManagerTest extends AbstractHeadlessTest {
     public void tearDown() throws Exception {
         super.tearDown();
     }
+//
+//
+//    @Test
+//    public void testPreloadNoMerge() throws Exception {
+//
+//        final String chr = "chr1";
+//        final int start = 151666494;
+//        final int halfwidth = 1000;
+//        final int end = start + 2 * halfwidth;
+//
+//        //Load separate intervals, check they don't merge
+//        AlignmentDataManager manager = getManager171();
+//        ReferenceFrame frame = new ReferenceFrame(frameName);
+//        AlignmentTrack.RenderOptions renderOptions = new AlignmentTrack.RenderOptions();
+//        frame.setBounds(0, end - start);
+//
+//        RenderContext context = new RenderContext(null, null, frame, null);
+//
+//        int lastStart = genome.getChromosome(chr).getLength() - 4 * halfwidth;
+//        int[] starts = new int[]{500, 5000, 15000, start, 500000, lastStart};
+//        int[] ends = new int[]{600, 10000, 20000, end, 600000, lastStart + 2 * halfwidth};
+//        for (int ii = 0; ii < starts.length; ii++) {
+//            frame.jumpTo(new Locus(chr, starts[ii], ends[ii]));
+//            int actEnd = (int) frame.getEnd();
+//
+//            manager.load(context.getReferenceFrame(), renderOptions, false);
+//
+//            assertManagerHasInterval(manager, context.getReferenceFrame(), chr, starts[ii], actEnd);
+//        }
+//
+//
+//    }
 
-    @Test
-    public void testPreloadPanning() throws Exception {
+    private static void assertManagerHasInterval(AlignmentDataManager manager, ReferenceFrame frame, String chr, int start, int end) {
 
-        final String chr = "chr1";
-        final int start = 151666494;
-        final int halfwidth = 1000;
-        final int end = start + 2 * halfwidth;
-        int panInterval = halfwidth;
-
-        int numPans = 20 * (end - start) / (panInterval) * 5;
-        AlignmentInterval interval = AlignmentDataManagerTest.performPanning(chr, start, end, panInterval, numPans);
-
-        assertNotNull(interval);
-    }
-
-    @Test
-    public void testPreloadNoMerge() throws Exception {
-
-        final String chr = "chr1";
-        final int start = 151666494;
-        final int halfwidth = 1000;
-        final int end = start + 2 * halfwidth;
-
-        //Load separate intervals, check they don't merge
-        AlignmentDataManager manager = getManager171();
-        ReferenceFrame frame = new ReferenceFrame(frameName);
-        AlignmentTrack.RenderOptions renderOptions = new AlignmentTrack.RenderOptions();
-        frame.setBounds(0, end - start);
-
-        RenderContext context = new RenderContext(null, null, frame, null);
-
-        int lastStart = genome.getChromosome(chr).getLength() - 4 * halfwidth;
-        int[] starts = new int[]{500, 5000, 15000, start, 500000, lastStart};
-        int[] ends = new int[]{600, 10000, 20000, end, 600000, lastStart + 2 * halfwidth};
-        for (int ii = 0; ii < starts.length; ii++) {
-            frame.jumpTo(new Locus(chr, starts[ii], ends[ii]));
-            int actEnd = (int) frame.getEnd();
-
-            manager.load(context.getReferenceFrame(), renderOptions, false);
-
-            assertManagerHasInterval(manager, chr, starts[ii], actEnd);
-        }
-
-
-    }
-
-    private static void assertManagerHasInterval(AlignmentDataManager manager, String chr, int start, int end) {
-        Range range = new Range(chr, start, end);
-        AlignmentInterval interval = manager.getLoadedInterval(range);
+        AlignmentInterval interval = manager.getLoadedInterval(frame);
         assertNotNull(interval);
 
         boolean haveInterval = interval.contains(chr, start, end);
@@ -129,41 +115,6 @@ public class AlignmentDataManagerTest extends AbstractHeadlessTest {
         return manager;
     }
 
-    /**
-     * Emulates panning across a specific interval.
-     *
-     * @param chr
-     * @param start
-     * @param end
-     * @param panInterval
-     * @param numPans
-     * @return
-     * @throws IOException
-     */
-    public static AlignmentInterval performPanning(String chr, int start, int end, int panInterval, int numPans) throws IOException {
-
-        AlignmentDataManager manager = getManager171();
-
-        int shift = 0;
-
-        ReferenceFrame frame = new ReferenceFrame(frameName);
-        AlignmentTrack.RenderOptions renderOptions = new AlignmentTrack.RenderOptions();
-        frame.setBounds(0, end - start);
-        RenderContext context = new RenderContext(null, null, frame, null);
-
-        for (int pp = 0; pp < numPans; pp++) {
-            shift = pp * panInterval;
-            Locus locus = new Locus(chr, start + shift, end + shift);
-            frame.jumpTo(locus);
-
-            manager.load(context.getReferenceFrame(), renderOptions, false);
-
-            assertManagerHasInterval(manager, chr, locus.getStart(), locus.getEnd());
-        }
-
-        return manager.getLoadedInterval(frame.getCurrentRange());
-
-    }
 
 
     @Test

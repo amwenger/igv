@@ -38,12 +38,17 @@ import org.apache.log4j.Logger;
 import org.broad.igv.Globals;
 import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.RegionOfInterest;
+import org.broad.igv.lists.Preloader;
 import org.broad.igv.track.*;
 import org.broad.igv.ui.AbstractDataPanelTool;
 import org.broad.igv.ui.IGV;
 import org.broad.igv.ui.UIConstants;
 import org.broad.igv.ui.WaitCursorManager;
+import org.broad.igv.ui.event.DataLoadedEvent;
+import org.broad.igv.ui.event.IGVEventBus;
+import org.broad.igv.ui.event.IGVEventObserver;
 import org.broad.igv.ui.util.DataPanelTool;
+import org.broad.igv.ui.util.UIUtilities;
 
 import javax.swing.*;
 import javax.swing.event.MouseInputAdapter;
@@ -57,6 +62,7 @@ import java.awt.event.ActionListener;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * The batch panel for displaying tracks and data.  A DataPanel is always associated with a ReferenceFrame.  Normally
@@ -65,7 +71,7 @@ import java.util.List;
  *
  * @author jrobinso
  */
-public class DataPanel extends JComponent implements Paintable {
+public class DataPanel extends JComponent implements Paintable, IGVEventObserver {
 
     private static Logger log = Logger.getLogger(DataPanel.class);
     private boolean isWaitingForToolTipText = false;
@@ -77,6 +83,8 @@ public class DataPanel extends JComponent implements Paintable {
     DataPanelContainer parent;
     private DataPanelPainter painter;
     private String tooltipText = "";
+
+    public boolean loadInProgress = false;
 
 
     public DataPanel(ReferenceFrame frame, DataPanelContainer parent) {
@@ -92,8 +100,22 @@ public class DataPanel extends JComponent implements Paintable {
         setBackground(PreferenceManager.getInstance().getAsColor(PreferenceManager.BACKGROUND_COLOR));
 
         ToolTipManager.sharedInstance().registerComponent(this);
+
+
+
+    //    IGVEventBus.getInstance().subscribe(DataLoadedEvent.class, this);
     }
 
+    @Override
+    public void receiveEvent(Object event) {
+
+        if(event instanceof  DataLoadedEvent) {
+           if(((DataLoadedEvent) event).referenceFrame == frame) {
+               log.info("Data loaded repaint " + frame);
+               repaint();
+           }
+        }
+    }
 
     /**
      * @return
@@ -122,6 +144,16 @@ public class DataPanel extends JComponent implements Paintable {
         RenderContext context = null;
         try {
 
+            long t0 = System.currentTimeMillis();
+
+            if (!allTracksLoaded()) {
+                if (!loadInProgress) {
+                    loadInProgress = true;
+                    Preloader.load(this);
+                }
+                return;
+            }
+
             Rectangle clipBounds = g.getClipBounds();
             final Rectangle visibleRect = getVisibleRect();
             final Rectangle damageRect = clipBounds == null ? visibleRect : clipBounds.intersection(visibleRect);
@@ -129,31 +161,13 @@ public class DataPanel extends JComponent implements Paintable {
 
             context = new RenderContext(this, graphics2D, frame, visibleRect);
 
-            if (Globals.IS_MAC) {
-                this.applyMacPerformanceHints((Graphics2D) g);
-            }
-
             final Collection<TrackGroup> groups = parent.getTrackGroups();
-
-            // If there are no tracks to paint, just exit
-            boolean hasTracks = false;
-            for (TrackGroup group : groups) {
-                if (group.getVisibleTracks().size() > 0) {
-                    hasTracks = true;
-                    break;
-                }
-            }
-            if (!hasTracks) {
-                removeMousableRegions();
-                return;
-            }
-
 
             int trackWidth = getWidth();
 
             computeMousableRegions(groups, trackWidth);
-            painter.paint(groups, context, trackWidth, getBackground(), damageRect);
 
+            painter.paint(groups, context, trackWidth, getBackground(), damageRect);
 
             // If there is a partial ROI in progress draw it first
             if (currentTool instanceof RegionOfInterestTool) {
@@ -168,12 +182,38 @@ public class DataPanel extends JComponent implements Paintable {
             drawAllRegions(g);
 
 
+            long dt = System.currentTimeMillis() - t0;
+            PanTool.repaintTime(dt);
+//            System.out.println("Paint time=" + dt);
         } finally {
 
             if (context != null) {
                 context.dispose();
             }
         }
+    }
+
+
+    public boolean allTracksLoaded() {
+        return parent.getTrackGroups().stream().
+                filter(TrackGroup::isVisible).
+                flatMap(trackGroup -> trackGroup.getVisibleTracks().stream()).
+                allMatch(track -> track.isReadyToPaint(frame));
+    }
+
+    public List<Track> notloadedTracks() {
+        return parent.getTrackGroups().stream().
+                filter(TrackGroup::isVisible).
+                flatMap(trackGroup -> trackGroup.getVisibleTracks().stream()).
+                filter(track -> track.isReadyToPaint(frame) == false).
+                collect(Collectors.toList());
+    }
+
+    public List<Track> visibleTracks() {
+        return parent.getTrackGroups().stream().
+                filter(TrackGroup::isVisible).
+                flatMap(trackGroup -> trackGroup.getVisibleTracks().stream()).
+                collect(Collectors.toList());
     }
 
     /**
@@ -498,23 +538,23 @@ public class DataPanel extends JComponent implements Paintable {
                 }
 
                 WaitCursorManager.CursorToken token = null;
-                if(showWaitCursor) token = WaitCursorManager.showWaitCursor();
+                if (showWaitCursor) token = WaitCursorManager.showWaitCursor();
                 try {
-                    if(zoomIncr > Integer.MIN_VALUE){
+                    if (zoomIncr > Integer.MIN_VALUE) {
                         frame.doZoomIncrement(zoomIncr);
-                    }else if(shiftOriginPixels > Integer.MIN_VALUE){
+                    } else if (shiftOriginPixels > Integer.MIN_VALUE) {
                         frame.shiftOriginPixels(shiftOriginPixels);
-                    }else{
+                    } else {
                         return;
                     }
 
                     //Assume that anything special enough to warrant a wait cursor
                     //should be in history
-                    if(showWaitCursor){
+                    if (showWaitCursor) {
                         frame.recordHistory();
                     }
                 } finally {
-                    if(token != null) WaitCursorManager.removeWaitCursor(token);
+                    if (token != null) WaitCursorManager.removeWaitCursor(token);
                 }
 
             }
@@ -528,28 +568,6 @@ public class DataPanel extends JComponent implements Paintable {
         addMouseMotionListener(mouseAdapter);
         addMouseListener(mouseAdapter);
         addMouseWheelListener(mouseAdapter);
-    }
-
-
-    /**
-     * Some performance hings from the Mac developer mailing list.  Might improve
-     * graphics performance?
-     * <p/>
-     * // TODO  do timing tests with and without these hints
-     *
-     * @param g2D
-     */
-    private void applyMacPerformanceHints(Graphics2D g2D) {
-
-        // From mac mailint list.  Might help performance ?
-        g2D.setRenderingHint(RenderingHints.KEY_ALPHA_INTERPOLATION, RenderingHints.VALUE_ALPHA_INTERPOLATION_SPEED);
-        g2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-        g2D.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_SPEED);
-        g2D.setRenderingHint(RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_DISABLE);
-        g2D.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
-        g2D.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
-
-
     }
 
     protected void removeMousableRegions() {
@@ -571,6 +589,8 @@ public class DataPanel extends JComponent implements Paintable {
          */
         private ClickTaskScheduler clickScheduler = new ClickTaskScheduler();
 
+        long lastClickTime = 0;
+
 
         @Override
         public void mouseMoved(MouseEvent e) {
@@ -582,8 +602,8 @@ public class DataPanel extends JComponent implements Paintable {
             }
             updateTooltipText(e.getX(), e.getY());
 
-            if(IGV.getInstance().isRulerEnabled()) {
-                IGV.getInstance().repaintDataPanels();
+            if (IGV.getInstance().isRulerEnabled()) {
+                IGV.getInstance().revalidateTrackPanels();
             }
 
         }
@@ -657,6 +677,8 @@ public class DataPanel extends JComponent implements Paintable {
         @Override
         public void mouseClicked(final MouseEvent e) {
 
+            long clickTime = System.currentTimeMillis();
+
             // ctrl-mouse down is the mac popup trigger, but you will also get a clck even.  Ignore the click.
             if (Globals.IS_MAC && e.isControlDown()) {
                 return;
@@ -664,11 +686,13 @@ public class DataPanel extends JComponent implements Paintable {
 
             if (currentTool instanceof RegionOfInterestTool) {
                 currentTool.mouseClicked(e);
+                e.consume();
                 return;
             }
 
             if (e.isPopupTrigger()) {
                 doPopupMenu(e);
+                e.consume();
                 return;
             }
 
@@ -679,25 +703,31 @@ public class DataPanel extends JComponent implements Paintable {
                 if (e.isShiftDown()) {
                     final double locationClicked = frame.getChromosomePosition(e.getX());
                     frame.doIncrementZoom(3, locationClicked);
+                    e.consume();
                 } else if (e.isAltDown()) {
                     final double locationClicked = frame.getChromosomePosition(e.getX());
                     frame.doIncrementZoom(-1, locationClicked);
+                    e.consume();
                 } else if ((e.isMetaDown() || e.isControlDown()) && track != null) {
                     TrackClickEvent te = new TrackClickEvent(e, frame);
-
-                    track.handleDataClick(te);
+                    if(track.handleDataClick(te)) {
+                        e.consume();
+                        return;
+                    }
 
                 } else {
 
                     // No modifier, left-click.  Defer processing with a timer until we are sure this is not the
                     // first of a "double-click".
 
-                    if (e.getClickCount() > 1) {
+                    if (clickTime - lastClickTime < UIConstants.getDoubleClickInterval()) {
                         clickScheduler.cancelClickTask();
                         final double locationClicked = frame.getChromosomePosition(e.getX());
                         frame.doIncrementZoom(1, locationClicked);
 
                     } else {
+
+                        lastClickTime = clickTime;
 
                         // Unhandled single click.  Delegate to track or tool unless second click arrives within
                         // double-click interval.

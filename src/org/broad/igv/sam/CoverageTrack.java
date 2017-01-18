@@ -163,6 +163,22 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
     }
 
+    @Override
+    public boolean isReadyToPaint(ReferenceFrame frame) {
+        if(this.alignmentTrack != null && this.alignmentTrack.isVisible()) {
+            return true;
+        }
+        else {
+            return dataManager.isLoaded(frame);
+        }
+    }
+
+    @Override
+    public void load(ReferenceFrame referenceFrame) {
+        dataManager.load(referenceFrame, renderOptions, true);
+    }
+
+
     public void setSnpThreshold(float snpThreshold) {
         this.snpThreshold = snpThreshold;
     }
@@ -231,7 +247,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
             AlignmentInterval interval = null;
             if (dataManager != null) {
                 dataManager.load(context.getReferenceFrame(), renderOptions, true);
-                interval = dataManager.getLoadedInterval(context.getReferenceFrame().getCurrentRange());
+                interval = dataManager.getLoadedInterval(context.getReferenceFrame());
             }
             if (interval != null) {
                 if (interval.contains(context.getChr(), (int) context.getOrigin(), (int) context.getEndLocation())) {
@@ -310,7 +326,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
         } else {
 
-            AlignmentInterval interval = dataManager.getLoadedInterval(frame.getCurrentRange());
+            AlignmentInterval interval = dataManager.getLoadedInterval(frame);
             if (interval == null) return null;
 
             int origin = (int) frame.getOrigin();
@@ -358,7 +374,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
         }
 
         if (frame.getScale() < minVisibleScale) {
-            AlignmentInterval interval = dataManager.getLoadedInterval(frame.getCurrentRange());
+            AlignmentInterval interval = dataManager.getLoadedInterval(frame);
             if (interval != null && interval.contains(chr, (int) position, (int) position)) {
                 AlignmentCounts counts = interval.getCounts();
                 if (counts != null) {
@@ -406,7 +422,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
             int max = 10;
             for (ReferenceFrame frame : frameList) {
-                AlignmentInterval interval = dataManager.getLoadedInterval(frame.getCurrentRange());
+                AlignmentInterval interval = dataManager.getLoadedInterval(frame);
                 if (interval == null) continue;
 
                 int origin = (int) frame.getOrigin();
@@ -858,7 +874,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
                 try {
                     float tmp = Float.parseFloat(value);
                     snpThreshold = tmp;
-                    IGV.getInstance().repaintDataPanels();
+                    IGV.getInstance().revalidateTrackPanels();
                 } catch (Exception exc) {
                     //log
                 }
@@ -940,11 +956,11 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
                         TDFReader reader = TDFReader.getReader(file.getAbsolutePath());
                         TDFDataSource ds = new TDFDataSource(reader, 0, getName() + " coverage", genome);
                         setDataSource(ds);
-                        IGV.getInstance().repaintDataPanels();
+                        IGV.getInstance().revalidateTrackPanels();
                     } else if (path.endsWith(".counts")) {
                         CoverageDataSource ds = new GobyCountArchiveDataSource(file);
                         setDataSource(ds);
-                        IGV.getInstance().repaintDataPanels();
+                        IGV.getInstance().revalidateTrackPanels();
                     } else {
                         MessageUtils.showMessage("Coverage data must be in .tdf format");
                     }

@@ -73,7 +73,7 @@ import static org.junit.Assert.assertFalse;
 public class TestUtils {
     public static final String DATA_DIR = "test/data/";
     public static final String TMP_OUTPUT_DIR = DATA_DIR + "out/";
-    public static final String defaultGenome = DATA_DIR + "/genomes/hg18.unittest.genome";
+    public static final String defaultGenome = DATA_DIR + "genomes/hg18.unittest.genome";
 
     //This is so ant can set the large data directory
     private static String LARGE_DATA_DIR_KEY = "LARGE_DATA_DIR";
@@ -90,7 +90,6 @@ public class TestUtils {
         resetTestUserDefinedGenomes();
         Globals.READ_TIMEOUT = 60 * 1000;
         Globals.CONNECT_TIMEOUT = 60 * 1000;
-        FTPClient.READ_TIMEOUT = 60 * 1000;
 
         //Create output directory if it doesn't exist
         File outDir = new File(TestUtils.TMP_OUTPUT_DIR);

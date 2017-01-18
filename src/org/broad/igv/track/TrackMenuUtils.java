@@ -34,9 +34,7 @@ import org.broad.igv.Globals;
 import org.broad.igv.PreferenceManager;
 import org.broad.igv.data.AbstractDataSource;
 import org.broad.igv.data.CombinedDataSource;
-import org.broad.igv.feature.Exon;
-import org.broad.igv.feature.FeatureUtils;
-import org.broad.igv.feature.IGVFeature;
+import org.broad.igv.feature.*;
 import org.broad.igv.feature.Range;
 import org.broad.igv.feature.basepair.BasePairTrack;
 import org.broad.igv.feature.genome.Genome;
@@ -641,7 +639,7 @@ public class TrackMenuUtils {
             //return SAMWriter.writeAlignmentFilePicard(inlocator, outPath, range.getChr(), range.getStart(), range.getEnd());
 
             //Export those in memory, overlapping current view
-            return SAMWriter.writeAlignmentFilePicard(dataManager, outFile, range.getChr(), range.getStart(), range.getEnd());
+            return SAMWriter.writeAlignmentFilePicard(dataManager, outFile, frame, range.getChr(), range.getStart(), range.getEnd());
         } catch (IOException e) {
             log.error(e.getMessage(), e);
             throw new RuntimeException(e);
@@ -838,7 +836,7 @@ public class TrackMenuUtils {
 
             public void actionPerformed(ActionEvent evt) {
                 FeatureTrack.setDrawBorder(drawBorderItem.isSelected());
-                IGV.getInstance().repaintDataPanels();
+                IGV.getInstance().revalidateTrackPanels();
             }
         });
 
@@ -862,7 +860,7 @@ public class TrackMenuUtils {
                 for (Track t : selectedTracks) {
                     t.getDataRange().setType(scaleType);
                 }
-                IGV.getInstance().repaintDataPanels();
+                IGV.getInstance().revalidateTrackPanels();
             }
         });
 
@@ -890,9 +888,6 @@ public class TrackMenuUtils {
                             t.removeAttribute(AttributeManager.GROUP_AUTOSCALE);
                         }
                     }
-
-                    DataPanelContainer.resetStateHash();
-
                     IGV.getInstance().repaint();
                 }
             });
@@ -907,14 +902,14 @@ public class TrackMenuUtils {
         autoscaleItem.addActionListener(new ActionListener() {
 
             public void actionPerformed(ActionEvent evt) {
+
                 int nextAutoscaleGroup = IGV.getInstance().getSession().getNextAutoscaleGroup();
+
                 for (Track t : selectedTracks) {
                     t.setAttributeValue(AttributeManager.GROUP_AUTOSCALE, String.valueOf(nextAutoscaleGroup));
                     t.setAutoScale(false);
                 }
                 IGV.getInstance().getSession().incrementNextAutoscaleGroup();
-
-                DataPanelContainer.resetStateHash();
 
                 PreferenceManager.getInstance().setShowAttributeView(true);
                 IGV.getInstance().getMainPanel().invalidate();
@@ -964,7 +959,7 @@ public class TrackMenuUtils {
                             ((DataTrack) t).setShowDataRange(showDataRange);
                         }
                     }
-                    IGV.getInstance().repaintDataPanels();
+                    IGV.getInstance().revalidateTrackPanels();
                 }
             });
         }
@@ -1074,7 +1069,6 @@ public class TrackMenuUtils {
             return;
         }
 
-        DataPanelContainer.resetStateHash();
         IGV.getInstance().removeTracks(selectedTracks);
         IGV.getInstance().doRefresh();
     }
@@ -1352,12 +1346,19 @@ public class TrackMenuUtils {
     }
 
     public static JMenuItem getCopySequenceItem(final Feature f) {
+
+        final Strand strand;
+        if(f instanceof IGVFeature) {
+            strand = ((IGVFeature) f).getStrand();
+        } else {
+           strand = Strand.NONE;
+        }
+
         JMenuItem item = new JMenuItem("Copy Sequence");
         item.addActionListener(new ActionListener() {
-
             public void actionPerformed(ActionEvent evt) {
                 Genome genome = GenomeManager.getInstance().getCurrentGenome();
-                IGV.copySequenceToClipboard(genome, f.getChr(), f.getStart(), f.getEnd());
+                IGV.copySequenceToClipboard(genome, f.getChr(), f.getStart(), f.getEnd(), strand);
             }
         });
         return item;
@@ -1379,7 +1380,15 @@ public class TrackMenuUtils {
         item.addActionListener(new ActionListener() {
 
             public void actionPerformed(ActionEvent evt) {
-                BlatClient.doBlatQuery(f.getChr(), f.getStart(), f.getEnd());
+
+                final Strand strand;
+                if(f instanceof IGVFeature) {
+                    strand = ((IGVFeature) f).getStrand();
+                } else {
+                    strand = Strand.NONE;
+                }
+
+                BlatClient.doBlatQuery(f.getChr(), f.getStart(), f.getEnd(), strand);
             }
         });
         return item;

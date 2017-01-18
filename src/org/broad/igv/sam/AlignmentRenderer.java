@@ -33,6 +33,7 @@ import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeManager;
 import org.broad.igv.renderer.ContinuousColorScale;
 import org.broad.igv.renderer.GraphicUtils;
+import org.broad.igv.renderer.SequenceRenderer;
 import org.broad.igv.sam.AlignmentTrack.ColorOption;
 import org.broad.igv.sam.AlignmentTrack.RenderOptions;
 import org.broad.igv.sam.AlignmentTrack.ShadeBasesOption;
@@ -50,7 +51,7 @@ import java.util.List;
 /**
  * @author jrobinso
  */
-public class AlignmentRenderer implements FeatureRenderer {
+public class AlignmentRenderer {
 
     private static Logger log = Logger.getLogger(AlignmentRenderer.class);
 
@@ -126,6 +127,7 @@ public class AlignmentRenderer implements FeatureRenderer {
         nucleotideColors.put('g', g);
         nucleotideColors.put('N', n);
         nucleotideColors.put('n', n);
+        nucleotideColors.put('-', Color.lightGray);
 
     }
 
@@ -362,6 +364,68 @@ public class AlignmentRenderer implements FeatureRenderer {
         }
     }
 
+
+    public void renderExpandedInsertion(InsertionMarker i,
+                                        List<Alignment> alignments,
+                                        RenderContext context,
+                                        Rectangle rect,
+                                        boolean leaveMargin) {
+
+        double origin = context.getOrigin();
+        double locScale = context.getScale();
+        boolean completeReadsOnly = PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_COMPLETE_READS_ONLY);
+
+        if ((alignments != null) && (alignments.size() > 0)) {
+
+            Graphics2D g = context.getGraphics2D("INSERTIONS");
+            //dhmay adding check for adequate track height
+            double dX = 1 / context.getScale();
+            int fontSize = (int)  Math.min(dX, 12);
+            if (fontSize >= 8) {
+                Font f = FontManager.getFont(Font.BOLD, fontSize);
+                g.setFont(f);
+            }
+
+            for (Alignment alignment : alignments) {
+
+                if (alignment.getEnd() < i.position) continue;
+                if (alignment.getStart() > i.position) break;
+
+                AlignmentBlock aBlock = alignment.getInsertionAt(i.position);
+
+                if (aBlock != null) {
+
+                    // Compute the start and dend of the alignment in pixels
+                    double pixelStart = (aBlock.getStart() - origin) / locScale;
+                    double pixelEnd = (aBlock.getEnd() - origin) / locScale;
+                    int x = (int) pixelStart;
+
+                    // If any any part of the feature fits in the track rectangle draw  it
+                    if (pixelEnd < rect.x || pixelStart > rect.getMaxX()) {
+                        continue;
+                    }
+
+                    int bpWidth = aBlock.getBases().length;
+                    double pxWidthExact = ((double) bpWidth) / locScale;
+                    int h = (int) Math.max(1, rect.getHeight() - 2);
+                    int y = (int) (rect.getY() + (rect.getHeight() - h) / 2) - 1;
+
+
+                    if (aBlock.getBases() == null) {
+                        g.setColor(purple);
+                        g.fillRect(x, y, (int) pxWidthExact, h);
+
+                    } else {
+                        drawExpandedInsertionBases(x, context, rect, aBlock, leaveMargin);
+                    }
+                }
+
+
+            }
+        }
+    }
+
+
     private void drawLinkedAlignment(LinkedAlignment alignment, Rectangle rowRect, RenderContext context,
                                      RenderOptions renderOptions, boolean leaveMargin,
                                      Map<String, Color> selectedReadNames, AlignmentCounts alignmentCounts) {
@@ -561,11 +625,13 @@ public class AlignmentRenderer implements FeatureRenderer {
             blockGraphics.drawLine(blockPxStart, y, blockPxEnd, y);
         } else {
             Shape blockShape;
-            int arrowPxWidth = Math.min(Math.min(5,h/2), blockPxWidth / 6);
+            int arrowPxWidth = Math.min(Math.min(5, h / 2), blockPxWidth / 6);
+
             if (!overlapped) {
-                int delta = Math.max(0, (int) (arrowPxWidth + 1 - AlignmentPacker.MIN_ALIGNMENT_SPACING / locSale));
-                if (leftmost && isNegativeStrand && tallEnoughForArrow) blockPxStart += delta;
-                if (rightmost && !isNegativeStrand && tallEnoughForArrow) blockPxEnd -= delta;
+                int pixelGap = (int) (AlignmentPacker.MIN_ALIGNMENT_SPACING / locSale);
+                if (pixelGap < arrowPxWidth) {
+                    arrowPxWidth = Math.max(0, arrowPxWidth - pixelGap);
+                }
             }
 
             // Draw block as a rectangle; use a pointed hexagon in terminal block to indicate strand.
@@ -589,11 +655,11 @@ public class AlignmentRenderer implements FeatureRenderer {
             }
             if (leftmost && leftClipped) {
                 clippedGraphics.drawLine(xPoly[0], yPoly[0], xPoly[1], yPoly[1]);
-                clippedGraphics.drawLine(xPoly[5], yPoly[5]-1, xPoly[0], yPoly[0]);
+                clippedGraphics.drawLine(xPoly[5], yPoly[5] - 1, xPoly[0], yPoly[0]);
             }
             if (rightmost && rightClipped) {
                 clippedGraphics.drawLine(xPoly[2], yPoly[2], xPoly[3], yPoly[3]);
-                clippedGraphics.drawLine(xPoly[3], yPoly[3], xPoly[4], yPoly[4]-1);
+                clippedGraphics.drawLine(xPoly[3], yPoly[3], xPoly[4], yPoly[4] - 1);
             }
         }
     }
@@ -669,7 +735,7 @@ public class AlignmentRenderer implements FeatureRenderer {
 
         // Define a graphics context for indel labels.
         Graphics2D largeIndelGraphics = context.getGraphics2D("INDEL_LABEL");
-        largeIndelGraphics.setFont(FontManager.getFont(Font.BOLD, h-2));
+        largeIndelGraphics.setFont(FontManager.getFont(Font.BOLD, h - 2));
 
         // Get a graphics context for drawing individual basepairs.
         Graphics2D bpGraphics = context.getGraphics2D("BASE");
@@ -707,7 +773,6 @@ public class AlignmentRenderer implements FeatureRenderer {
                         gapChromWidth = (int) gap.getnBases(),
                         gapChromEnd = gapChromStart + gapChromWidth,
                         gapPxEnd = (int) ((Math.min(contextChromEnd, gapChromEnd) - contextChromStart) / locScale);
-                double gapPxWidthExact = ((double) gapChromWidth) / locScale;
 
                 if (gapChromEnd <= contextChromStart) { // gap ends before the visible context
                     continue; // move to next gap
@@ -731,10 +796,10 @@ public class AlignmentRenderer implements FeatureRenderer {
                         blockChromEnd = gapChromStart,
                         blockPxWidth = (int) Math.max(1, (blockChromEnd - blockChromStart) / locScale - 1),
                         blockPxEnd = blockPxStart + blockPxWidth;
+
                 drawAlignmentBlock(g, outlineGraphics, clippedGraphics, strandGraphics, alignment.isNegativeStrand(),
                         alignmentChromStart, alignmentChromEnd, blockChromStart, blockChromEnd,
                         blockPxStart, blockPxWidth, y, h, locScale, overlapped, leftClipped, rightClipped);
-
 
                 // Draw the gap line.
                 Graphics2D gapGraphics = context.getGraphics2D("GAP");
@@ -750,8 +815,6 @@ public class AlignmentRenderer implements FeatureRenderer {
                 }
 
                 gapGraphics.drawLine(blockPxEnd + ggOffset, y + h / 2, gapPxEnd - ggOffset, y + h / 2);
-
-
                 // Label the size of the deletion if it is "large" and the label fits.
                 if (flagLargeIndels && (gap.getType() == SAMAlignment.DELETION) && gapChromWidth > largeInsertionsThreshold) {
                     drawLargeIndelLabel(largeIndelGraphics, false, Globals.DECIMAL_FORMAT.format(gapChromWidth), (int) ((blockPxEnd + gapPxEnd) / 2), y, h, gapPxEnd - blockPxEnd - 2, null);
@@ -791,6 +854,7 @@ public class AlignmentRenderer implements FeatureRenderer {
             }
         }
     }
+
 
     /**
      * Draw bases for an alignment block.  The bases are "overlaid" on the block with a transparency value (alpha)
@@ -1055,7 +1119,7 @@ public class AlignmentRenderer implements FeatureRenderer {
         final float snpThreshold = prefs.getAsFloat(PreferenceManager.SAM_ALLELE_THRESHOLD);
 
         // TODO Quick consensus for insertions needs worked -- disabled for now
-        boolean quickConsensus = false ;//renderOptions.quickConsensusMode;
+        boolean quickConsensus = false;//renderOptions.quickConsensusMode;
 
 
         if (insertions != null) {
@@ -1086,6 +1150,53 @@ public class AlignmentRenderer implements FeatureRenderer {
             }
         }
     }
+
+
+    private void drawExpandedInsertionBases(int pixelPosition,
+                                            RenderContext context,
+                                            Rectangle rect,
+                                            AlignmentBlock block,
+                                            boolean leaveMargin) {
+
+        Graphics2D g = context.getGraphics2D("INSERTIONS");
+        byte[] bases = block.getBases();
+        int padding = block.getPadding();
+
+        double locScale = context.getScale();
+        double origin = context.getOrigin();
+
+        // Compute bounds
+        int pY = (int) rect.getY();
+        int dY = (int) rect.getHeight();
+        int dX = (int) Math.max(1, (1.0 / locScale));
+
+        final int size = bases.length + padding;
+        for (int p = 0; p < size; p++) {
+
+            char  c = p < padding ? '-' : (char) bases[p - padding];
+
+            Color color = SequenceRenderer.nucleotideColors.get(c);
+            if (color == null) {
+                color = Color.black;
+            }
+
+            // If there is room for text draw the character, otherwise
+            // just draw a rectangle to represent the
+            int pX = (int) (pixelPosition + (p / locScale));
+
+            // Don't draw out of clipping rect
+            if (pX > rect.getMaxX()) {
+                break;
+            } else if (pX + dX < rect.getX()) {
+                continue;
+            }
+
+            drawBase(g, color, c, pX, pY, dX, dY - (leaveMargin ? 2 : 0), false, null);
+
+        }
+
+    }
+
 
     private Color getAlignmentColor(Alignment alignment, RenderOptions renderOptions) {
 

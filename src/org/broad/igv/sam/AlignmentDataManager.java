@@ -26,26 +26,20 @@
 package org.broad.igv.sam;
 
 import org.apache.log4j.Logger;
-import org.broad.igv.Globals;
 import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.Range;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.sam.AlignmentTrack.SortOption;
 import org.broad.igv.sam.reader.AlignmentReaderFactory;
 import org.broad.igv.track.RenderContext;
-import org.broad.igv.ui.IGV;
 import org.broad.igv.ui.event.DataLoadedEvent;
 import org.broad.igv.ui.event.IGVEventBus;
 import org.broad.igv.ui.event.IGVEventObserver;
 import org.broad.igv.ui.panel.FrameManager;
 import org.broad.igv.ui.panel.ReferenceFrame;
-import org.broad.igv.ui.util.ProgressMonitor;
-import org.broad.igv.util.LongRunningTask;
-import org.broad.igv.util.NamedRunnable;
 import org.broad.igv.util.ResourceLocator;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import javax.swing.*;
 import java.io.IOException;
 import java.util.*;
 
@@ -53,7 +47,8 @@ public class AlignmentDataManager implements IGVEventObserver {
 
     private static Logger log = Logger.getLogger(AlignmentDataManager.class);
 
-    private IntervalCache loadedIntervalCache;
+    private Map<ReferenceFrame, AlignmentInterval> intervalCache;
+
     private ResourceLocator locator;
     private HashMap<String, String> chrMappings = new HashMap();
     private volatile boolean isLoading = false;
@@ -73,17 +68,27 @@ public class AlignmentDataManager implements IGVEventObserver {
         peStats = new HashMap();
         initLoadOptions();
         initChrMap(genome);
-        loadedIntervalCache = new IntervalCache(FrameManager.getFrames().size());
+        intervalCache = Collections.synchronizedMap(new HashMap<>());
         IGVEventBus.getInstance().subscribe(FrameManager.ChangeEvent.class, this);
     }
 
-    public void receiveEvent(Object e) {
+    public void receiveEvent(Object event) {
 
-        if (e instanceof FrameManager.ChangeEvent) {
-            List<ReferenceFrame> frames = ((FrameManager.ChangeEvent) e).getFrames();
-            loadedIntervalCache.setMaxSize(frames.size(), frames);
+        if (event instanceof FrameManager.ChangeEvent) {
+
+            Collection<ReferenceFrame> frames = ((FrameManager.ChangeEvent) event).getFrames();
+            Map<ReferenceFrame, AlignmentInterval> newCache = Collections.synchronizedMap(new HashMap<>());
+            // Trim cache to include only current frames
+            for(ReferenceFrame f : frames) {
+                if(intervalCache.containsKey(f)) {
+                    newCache.put(f, intervalCache.get(f));
+                }
+            }
+            intervalCache = newCache;
+
+
         } else {
-            log.info("Unknown event type: " + e.getClass());
+            log.info("Unknown event type: " + event.getClass());
         }
     }
 
@@ -161,20 +166,8 @@ public class AlignmentDataManager implements IGVEventObserver {
     }
 
 
-    public boolean isIonTorrent() {
-        Set<String> platforms = reader.getPlatforms();
-        if (platforms != null) {
-            return platforms.contains("IONTORRENT");
-        }
-        return false;
-    }
-
-    public Collection<AlignmentInterval> getLoadedIntervals() {
-        return this.loadedIntervalCache.values();
-    }
-
-    public AlignmentInterval getLoadedInterval(Range range) {
-        return loadedIntervalCache.getIntervalForRange(range);
+    public AlignmentInterval getLoadedInterval(ReferenceFrame frame) {
+        return intervalCache.get(frame);
     }
 
     /**
@@ -185,7 +178,7 @@ public class AlignmentDataManager implements IGVEventObserver {
      */
     public boolean sortRows(SortOption option, ReferenceFrame frame, double location, String tag) {
 
-        AlignmentInterval interval = getLoadedInterval(frame.getCurrentRange());
+        AlignmentInterval interval = getLoadedInterval(frame);
         if (interval == null) {
             return false;
         } else {
@@ -220,35 +213,44 @@ public class AlignmentDataManager implements IGVEventObserver {
      * @return Whether repacking was performed
      */
     void packAlignments(AlignmentTrack.RenderOptions renderOptions) {
-        for (AlignmentInterval interval : loadedIntervalCache.values()) {
+        for (AlignmentInterval interval : intervalCache.values()) {
             interval.packAlignments(renderOptions);
         }
     }
+
+
+    public boolean isLoaded(ReferenceFrame frame) {
+
+        AlignmentInterval interval = intervalCache.get(frame);
+        if (interval == null) {
+            return false;
+        } else {
+
+            Range range = frame.getCurrentRange();
+
+            return interval.contains(range.getChr(), range.getStart(), range.getEnd());
+        }
+    }
+
 
     public void load(ReferenceFrame referenceFrame,
                      AlignmentTrack.RenderOptions renderOptions,
                      boolean expandEnds) {
 
+        if (isLoaded(referenceFrame)) return;  // Already loaded
         synchronized (loadLock) {
             final String chr = referenceFrame.getChrName();
-            final int start = (int) referenceFrame.getOrigin();
-            final int end = (int) referenceFrame.getEnd();
-            AlignmentInterval loadedInterval = loadedIntervalCache.getIntervalForRange(referenceFrame.getCurrentRange());
+            Range range = referenceFrame.getCurrentRange();
 
+            final int start = (int) range.getStart();
+            final int end = (int) range.getEnd();
             int adjustedStart = start;
             int adjustedEnd = end;
+
             // Expand the interval by the lesser of  +/- a 2 screens, or max visible range
             int windowSize = Math.min(4 * (end - start), PreferenceManager.getInstance().getAsInt(PreferenceManager.SAM_MAX_VISIBLE_RANGE) * 1000);
             int center = (end + start) / 2;
             int expand = Math.max(end - start, windowSize / 2);
-
-            if (loadedInterval != null) {
-                // First see if we have a loaded interval that fully contain the requested interval.
-                // If so, we don't need to load it
-                if (loadedInterval.contains(chr, start, end)) {
-                    return;
-                }
-            }
 
             if (expandEnds) {
                 adjustedStart = Math.max(0, Math.min(start, center - expand));
@@ -256,62 +258,23 @@ public class AlignmentDataManager implements IGVEventObserver {
             }
             loadAlignments(chr, adjustedStart, adjustedEnd, renderOptions, referenceFrame);
         }
-
     }
 
-    public synchronized PackedAlignments getGroups(RenderContext context, AlignmentTrack.RenderOptions renderOptions) {
-        load(context.getReferenceFrame(), renderOptions, false);
-        Range range = context.getReferenceFrame().getCurrentRange();
+    private void loadAlignments(final String chr, final int start, final int end,
+                                final AlignmentTrack.RenderOptions renderOptions,
+                                final ReferenceFrame frame) {
 
-        AlignmentInterval interval = getLoadedInterval(range);
-        if (interval != null) {
-            return interval.getPackedAlignments();
-        } else {
-            return null;
-        }
-    }
+        log.debug("Loading alignments: " + chr + ":" + start + "-" + end + " for " + AlignmentDataManager.this);
 
-    public void clear() {
-        // reader.clearCache();
-        loadedIntervalCache.clear();
-    }
+        AlignmentInterval loadedInterval = loadInterval(chr, start, end, renderOptions);
+        intervalCache.put(frame, loadedInterval);
 
-    public void dumpAlignments() {
-        for (AlignmentInterval interval : loadedIntervalCache.values()) {
-            interval.dumpAlignments();
-        }
-    }
+        packAlignments(renderOptions);
+        IGVEventBus.getInstance().post(new DataLoadedEvent(frame));
 
-    public synchronized void loadAlignments(final String chr, final int start, final int end,
-                                            final AlignmentTrack.RenderOptions renderOptions,
-                                            final ReferenceFrame frame) {
+        isLoading = false;
 
-        if (isLoading || chr.equals(Globals.CHR_ALL)) {
-            return;
-        }
 
-        isLoading = true;
-
-        NamedRunnable runnable = new NamedRunnable() {
-
-            public String getName() {
-                return "loadAlignments";
-            }
-
-            public void run() {
-
-                log.debug("Loading alignments: " + chr + ":" + start + "-" + end + " for " + AlignmentDataManager.this);
-
-                AlignmentInterval loadedInterval = loadInterval(chr, start, end, renderOptions);
-                loadedIntervalCache.add(loadedInterval);
-
-                packAlignments(renderOptions);
-                IGVEventBus.getInstance().post(new DataLoadedEvent(frame));
-
-                isLoading = false;
-            }
-        };
-        LongRunningTask.submit(runnable);
     }
 
     AlignmentInterval loadInterval(String chr, int start, int end, AlignmentTrack.RenderOptions renderOptions) {
@@ -323,25 +286,37 @@ public class AlignmentDataManager implements IGVEventObserver {
         final AlignmentTrack.BisulfiteContext bisulfiteContext =
                 renderOptions != null ? renderOptions.bisulfiteContext : null;
 
-        ProgressMonitor monitor = null;
-        //Show cancel button
-        if (IGV.hasInstance() && !Globals.isBatch() && !Globals.isHeadless()) {
-            ActionListener cancelListener = new ActionListener() {
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    AlignmentTileLoader.cancelReaders();
-                }
-            };
-            IGV.getInstance().getContentPane().getStatusBar().activateCancelButton(cancelListener);
-        }
-
         SpliceJunctionHelper spliceJunctionHelper = new SpliceJunctionHelper(this.loadOptions);
+
         AlignmentTileLoader.AlignmentTile t = reader.loadTile(sequence, start, end, spliceJunctionHelper,
-                downsampleOptions, readStats, peStats, bisulfiteContext, showAlignments, monitor);
+                downsampleOptions, readStats, peStats, bisulfiteContext, showAlignments);
 
         List<Alignment> alignments = t.getAlignments();
         List<DownsampledInterval> downsampledIntervals = t.getDownsampledIntervals();
         return new AlignmentInterval(chr, start, end, alignments, t.getCounts(), spliceJunctionHelper, downsampledIntervals);
+    }
+
+
+    public synchronized PackedAlignments getGroups(RenderContext context, AlignmentTrack.RenderOptions renderOptions) {
+     //   load(context.getReferenceFrame(), renderOptions, false);
+     //   Range range = context.getReferenceFrame().getCurrentRange();
+
+        AlignmentInterval interval = intervalCache.get(context.getReferenceFrame());
+        if (interval != null) {
+            return interval.getPackedAlignments();
+        } else {
+            return null;
+        }
+    }
+
+    public void clear() {
+        intervalCache.clear();
+    }
+
+    public void dumpAlignments() {
+        for (AlignmentInterval interval : intervalCache.values()) {
+            interval.dumpAlignments();
+        }
     }
 
     /**
@@ -357,7 +332,7 @@ public class AlignmentDataManager implements IGVEventObserver {
         int start = (int) position;
         int end = start + 1;
 
-        AlignmentInterval interval = getLoadedInterval(referenceFrame.getCurrentRange());
+        AlignmentInterval interval = intervalCache.get(referenceFrame);
         if (interval == null) {
             return null;
         } else {
@@ -373,7 +348,7 @@ public class AlignmentDataManager implements IGVEventObserver {
     public int getNLevels() {
         int nLevels = 0;
 
-        for (AlignmentInterval interval : loadedIntervalCache.values()) {
+        for (AlignmentInterval interval : intervalCache.values()) {
             PackedAlignments packedAlignments = interval.getPackedAlignments();
             if (packedAlignments != null) {
                 int intervalNLevels = packedAlignments.getNLevels();
@@ -389,10 +364,12 @@ public class AlignmentDataManager implements IGVEventObserver {
      */
     public int getMaxGroupCount() {
         int groupCount = 0;
-        for (AlignmentInterval interval : loadedIntervalCache.values()) {
-            PackedAlignments packedAlignments = interval.getPackedAlignments();
-            if (packedAlignments != null) {
-                groupCount = Math.max(groupCount, packedAlignments.size());
+        for (AlignmentInterval interval : intervalCache.values()) {
+            if(interval != null) {  // Not sure how this happens but it does
+                PackedAlignments packedAlignments = interval.getPackedAlignments();
+                if (packedAlignments != null) {
+                    groupCount = Math.max(groupCount, packedAlignments.size());
+                }
             }
         }
         return groupCount;
@@ -425,7 +402,7 @@ public class AlignmentDataManager implements IGVEventObserver {
 
     public void setMinJunctionCoverage(int minJunctionCoverage) {
         this.loadOptions = new SpliceJunctionHelper.LoadOptions(minJunctionCoverage, this.loadOptions.minReadFlankingWidth);
-        for (AlignmentInterval interval : getLoadedIntervals()) {
+        for (AlignmentInterval interval : intervalCache.values()) {
             interval.getSpliceJunctionHelper().setLoadOptions(this.loadOptions);
         }
     }
@@ -449,6 +426,10 @@ public class AlignmentDataManager implements IGVEventObserver {
 
     public boolean isMoleculo() {
         return reader.isMoleculo();
+    }
+
+    public Collection<AlignmentInterval> getLoadedIntervals() {
+        return intervalCache.values();
     }
 
     public static class DownsampleOptions {
@@ -540,6 +521,7 @@ public class AlignmentDataManager implements IGVEventObserver {
                     return interval;
                 }
             }
+
             return null;
 
         }

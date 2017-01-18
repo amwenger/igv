@@ -37,12 +37,14 @@ import org.broad.igv.feature.Locus;
 import org.broad.igv.feature.Range;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.sam.InsertionManager;
+import org.broad.igv.sam.InsertionMarker;
 import org.broad.igv.ui.IGV;
 import org.broad.igv.ui.event.IGVEventBus;
-import org.broad.igv.ui.event.IGVEventObserver;
 import org.broad.igv.ui.event.ViewChange;
 import org.broad.igv.ui.util.MessageUtils;
-import org.broad.igv.util.LongRunningTask;
+
+import java.util.List;
 
 
 /**
@@ -51,6 +53,13 @@ import org.broad.igv.util.LongRunningTask;
 public class ReferenceFrame {
 
     private static Logger log = Logger.getLogger(ReferenceFrame.class);
+
+
+    /**
+     * The origin in bp
+     */
+    public volatile double origin = 0;
+
 
     /**
      * The nominal viewport width in pixels.
@@ -109,17 +118,14 @@ public class ReferenceFrame {
      */
     //private double maxPixel;
 
-    /**
-     * The origin in bp
-     */
-    protected volatile double origin = 0;
 
     /**
      * The location (x axis) locationScale in base pairs / virtual pixel
      */
-    protected volatile double locationScale;
+    protected volatile double scale;
 
     protected Locus initialLocus = null;
+
 
 
     public ReferenceFrame(String name) {
@@ -137,7 +143,7 @@ public class ReferenceFrame {
     public ReferenceFrame(ReferenceFrame otherFrame) {
         this.chrName = otherFrame.chrName;
         this.initialLocus = otherFrame.initialLocus;
-        this.locationScale = otherFrame.locationScale;
+        this.scale = otherFrame.scale;
         this.minZoom = otherFrame.minZoom;
         this.name = otherFrame.name;
         this.nTiles = otherFrame.nTiles;
@@ -167,13 +173,16 @@ public class ReferenceFrame {
         getEventBus().post(ViewChange.Result());
     }
 
+    public void changeGenome(Genome genome) {
+        setChromosomeName(genome.getHomeChromosome(), true);
+    }
+
     public void changeChromosome(String chrName, boolean recordHistory) {
         boolean changed = setChromosomeName(chrName, false);
         if (changed) {
             ViewChange resultEvent = ViewChange.ChromosomeChangeResult(chrName);
             resultEvent.setRecordHistory(recordHistory);
             getEventBus().post(resultEvent);
-
             changeZoom(0);
         }
     }
@@ -311,10 +320,10 @@ public class ReferenceFrame {
      * @return
      */
     public double getScale() {
-        if (locationScale <= 0) {
+        if (scale <= 0) {
             computeLocationScale();
         }
-        return locationScale;
+        return scale;
     }
 
     /**
@@ -343,7 +352,7 @@ public class ReferenceFrame {
         if (shouldChangeChromosome(name) || force) {
             chrName = name;
             origin = 0;
-            this.locationScale = -1;
+            this.scale = -1;
             this.calculateMaxZoom();
 
             this.zoom = -1;
@@ -368,7 +377,13 @@ public class ReferenceFrame {
         IGV.getInstance().getSession().getHistory().push(getFormattedLocusString(), zoom);
     }
 
+
     public void shiftOriginPixels(int delta) {
+
+//        if(IGV.getInstance().getSession().expandInsertions) {
+//            return;  // Disable panning in expanded insertion mode for now
+//        }
+
         double shiftBP = delta * getScale();
         setOrigin(origin + shiftBP);
         getEventBus().post(ViewChange.Result());
@@ -436,7 +451,7 @@ public class ReferenceFrame {
             log.debug("New start = " + (int) origin);
             log.debug("New end = " + (int) getEnd());
             log.debug("New center = " + (int) getCenter());
-            log.debug("Scale = " + locationScale);
+            log.debug("Scale = " + scale);
         }
 
         getEventBus().post(ViewChange.LocusChangeResult(chrName, start, end));
@@ -508,8 +523,37 @@ public class ReferenceFrame {
      * @return
      */
     public double getChromosomePosition(int screenPosition) {
-        return origin + getScale() * screenPosition;
+
+        InsertionMarker i = InsertionManager.getInstance().getSelectedInsertion(getChrName());
+
+        if (i != null && i.position > origin) {
+            // if (IGV.getInstance().getSession().expandInsertions && insertionMarkers != null && insertionMarkers.size() > 0) {
+            double start = getOrigin();
+            double scale = getScale();
+            double iEnd = 0,
+                    iStart = 0;
+
+
+            iStart = iEnd + (i.position - start) / scale; // Screen position of insertionMarker start
+            if (screenPosition < iStart) {
+                return start + scale * (screenPosition - iEnd);
+            }
+
+            iEnd = iStart + i.size / scale;  // Screen position of insertionMarker end
+            if (screenPosition < iEnd) {
+                return i.position;   // In the gap
+            }
+
+            start = i.position + 1;
+            //    }
+            return start + scale * (screenPosition - iEnd);
+
+        } else {
+            return origin + getScale() * screenPosition;
+        }
+
     }
+
 
     /**
      * Return the screen position corresponding to the chromosomal position.
@@ -518,7 +562,15 @@ public class ReferenceFrame {
      * @return
      */
     public int getScreenPosition(double chromosomePosition) {
-        return (int) ((chromosomePosition - origin) / getScale());
+
+        InsertionMarker i = InsertionManager.getInstance().getSelectedInsertion(chrName);
+
+        if(i == null || i.position < origin ||  i.position > chromosomePosition) {
+            return (int) ((chromosomePosition - origin) / getScale());
+        }
+        else {
+            return (int) ((chromosomePosition + i.size - origin) / getScale());
+        }
     }
 
 
@@ -619,7 +671,7 @@ public class ReferenceFrame {
     }
 
     public int getStateHash() {
-        return (chrName + origin + locationScale + widthInPixels).hashCode();
+        return (chrName + origin + scale + widthInPixels).hashCode();
     }
 
 
@@ -641,12 +693,12 @@ public class ReferenceFrame {
             if (this.initialLocus != null) setEnd = this.initialLocus.getEnd();
 
             if (setEnd > 0 && widthInPixels > 0) {
-                this.locationScale = ((setEnd - origin) / widthInPixels);
+                this.scale = ((setEnd - origin) / widthInPixels);
                 this.initialLocus = null;
             } else {
                 double virtualPixelSize = getTilesTimesBinsPerTile();
                 double nPixel = Math.max(virtualPixelSize, widthInPixels);
-                this.locationScale = (((double) getChromosomeLength()) / nPixel);
+                this.scale = (((double) getChromosomeLength()) / nPixel);
             }
         }
     }
@@ -707,7 +759,6 @@ public class ReferenceFrame {
             return chromosome.getLength();
         }
     }
-
 
 
     private static Genome getGenome() {

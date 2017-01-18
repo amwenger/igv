@@ -32,6 +32,7 @@ import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.FeatureUtils;
 import org.broad.igv.feature.Locus;
 import org.broad.igv.feature.Range;
+import org.broad.igv.feature.Strand;
 import org.broad.igv.feature.genome.ChromosomeNameComparator;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.lists.GeneList;
@@ -48,8 +49,7 @@ import org.broad.igv.ui.SashimiPlot;
 import org.broad.igv.ui.color.ColorTable;
 import org.broad.igv.ui.color.ColorUtilities;
 import org.broad.igv.ui.color.PaletteColorTable;
-import org.broad.igv.ui.event.AlignmentTrackEvent;
-import org.broad.igv.ui.event.AlignmentTrackEventListener;
+import org.broad.igv.ui.event.*;
 import org.broad.igv.ui.panel.DataPanel;
 import org.broad.igv.ui.panel.FrameManager;
 import org.broad.igv.ui.panel.IGVPopupMenu;
@@ -86,20 +86,26 @@ import java.util.List;
 @XmlType(factoryMethod = "getNextTrack")
 @XmlSeeAlso(AlignmentTrack.RenderOptions.class)
 
-public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEventListener {
+public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEventListener, IGVEventObserver {
+
+    private static Logger log = Logger.getLogger(AlignmentTrack.class);
 
     public static final int GROUP_LABEL_HEIGHT = 10;
-    private static Logger log = Logger.getLogger(AlignmentTrack.class);
+
     static final int GROUP_MARGIN = 5;
     static final int TOP_MARGIN = 5;
     static final int DS_MARGIN_0 = 2;
     static final int DOWNAMPLED_ROW_HEIGHT = 3;
+    static final int INSERTION_ROW_HEIGHT = 9;
     static final int DS_MARGIN_2 = 5;
+
+    private final AlignmentRenderer renderer;
 
     private boolean showSpliceJunctions;
     private boolean removed = false;
     private RenderRollback renderRollback;
     private boolean showGroupLine;
+    private Map<ReferenceFrame, List<InsertionInterval>> insertionIntervalsMap;
 
     public enum ShadeBasesOption {
         NONE, QUALITY
@@ -155,7 +161,6 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
     static final BisulfiteContext DEFAULT_BISULFITE_CONTEXT = BisulfiteContext.CG;
 
-    private boolean ionTorrent;
     private SequenceTrack sequenceTrack;
     private CoverageTrack coverageTrack;
     private SpliceJunctionTrack spliceJunctionTrack;
@@ -166,12 +171,12 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     private int collapsedHeight = 9;
     private int maxSquishedHeight = 5;
     private int squishedHeight = maxSquishedHeight;
-    private FeatureRenderer renderer;
 
     private int minHeight = 50;
     private AlignmentDataManager dataManager;
     private Rectangle alignmentsRect;
     private Rectangle downsampleRect;
+    private Rectangle insertionRect;
     private ColorTable readNamePalette;
 
     // Dynamic fields
@@ -201,8 +206,6 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
         this.dataManager = dataManager;
 
-        ionTorrent = dataManager.isIonTorrent();
-
         minimumHeight = 50;
         maximumHeight = Integer.MAX_VALUE;
 
@@ -224,11 +227,31 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
         readNamePalette = new PaletteColorTable(ColorUtilities.getDefaultPalette());
 
+        this.insertionIntervalsMap = Collections.synchronizedMap(new HashMap<>());
+
         // Register track
         if (!Globals.isHeadless()) {
             IGV.getInstance().addAlignmentTrackEventListener(this);
         }
+
+        IGVEventBus.getInstance().subscribe(FrameManager.ChangeEvent.class, this);
     }
+
+
+    @Override
+    public void receiveEvent(Object event) {
+        // Trim insertionInterval map to current frames
+        if (event instanceof FrameManager.ChangeEvent) {
+            Map<ReferenceFrame, List<InsertionInterval>> newMap = Collections.synchronizedMap(new HashMap<>());
+            for(ReferenceFrame frame : ((FrameManager.ChangeEvent) event).getFrames()) {
+                if(insertionIntervalsMap.containsKey(frame)) {
+                    newMap.put(frame, insertionIntervalsMap.get(frame));
+                }
+            }
+            insertionIntervalsMap = newMap;
+        }
+    }
+
 
     /**
      * Set the experiment type (RNA, Bisulfite, or OTHER)
@@ -304,6 +327,10 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         int h = Math.max(minHeight, getNLevels() * getRowHeight() + nGroups * GROUP_MARGIN + TOP_MARGIN
                 + DS_MARGIN_0 + DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_2);
 
+        if (true) {   // TODO - replace with expand insertions preference
+            h += INSERTION_ROW_HEIGHT + DS_MARGIN_0;
+        }
+
 
         h = Math.min(maximumHeight, h);
         return h;
@@ -312,11 +339,9 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     private int getRowHeight() {
         if (getDisplayMode() == DisplayMode.EXPANDED) {
             return expandedHeight;
-        }
-        else if (getDisplayMode() == DisplayMode.COLLAPSED) {
+        } else if (getDisplayMode() == DisplayMode.COLLAPSED) {
             return collapsedHeight;
-        }
-        else {
+        } else {
             return squishedHeight;
         }
     }
@@ -324,6 +349,19 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     private int getNLevels() {
         return dataManager.getNLevels();
     }
+
+    @Override
+    public boolean isReadyToPaint(ReferenceFrame frame) {
+        if (frame.getScale() > dataManager.getMinVisibleScale()) {
+            return true;   // Nothing to paint
+        } else {
+
+        }
+        List<InsertionInterval> insertionIntervals = getInsertionIntervals(frame);
+        insertionIntervals.clear();
+        return dataManager.isLoaded(frame);
+    }
+
 
     @Override
     public void load(ReferenceFrame referenceFrame) {
@@ -359,8 +397,14 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         downsampleRect.height = DOWNAMPLED_ROW_HEIGHT;
         renderDownsampledIntervals(context, downsampleRect);
 
+        insertionRect = new Rectangle(rect);
+        insertionRect.y += DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_0;
+        insertionRect.height = INSERTION_ROW_HEIGHT;
+        renderInsertionIntervals(context, insertionRect);
+
         alignmentsRect = new Rectangle(rect);
-        alignmentsRect.y += DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_2;
+        alignmentsRect.y += DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_2 + INSERTION_ROW_HEIGHT + 2;
+        alignmentsRect.height -= DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_2 + INSERTION_ROW_HEIGHT + 2;
         renderAlignments(context, alignmentsRect);
         dataPanel.revalidate();
     }
@@ -370,15 +414,18 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         // Might be offscreen
         if (!context.getVisibleRect().intersects(downsampleRect)) return;
 
-        final AlignmentInterval loadedInterval = dataManager.getLoadedInterval(context.getReferenceFrame().getCurrentRange());
+        final AlignmentInterval loadedInterval = dataManager.getLoadedInterval(context.getReferenceFrame());
         if (loadedInterval == null) return;
 
         Graphics2D g = context.getGraphic2DForColor(Color.black);
 
         List<DownsampledInterval> intervals = loadedInterval.getDownsampledIntervals();
         for (DownsampledInterval interval : intervals) {
-            int x0 = context.bpToScreenPixel(interval.getStart());
-            int x1 = context.bpToScreenPixel(interval.getEnd());
+            final double scale = context.getScale();
+            final double origin = context.getOrigin();
+
+            int x0 = (int) ((interval.getStart() - origin) / scale);
+            int x1 = (int) ((interval.getEnd() - origin) / scale);
             int w = Math.max(1, x1 - x0);
             // If there is room, leave a gap on one side
             if (w > 5) w--;
@@ -388,6 +435,50 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             g.fillRect(x0, downsampleRect.y, w, downsampleRect.height);
         }
     }
+
+    private List<InsertionInterval> getInsertionIntervals(ReferenceFrame frame) {
+        List<InsertionInterval> insertionIntervals = insertionIntervalsMap.get(frame);
+        if (insertionIntervals == null) {
+            insertionIntervals = new ArrayList<>();
+            insertionIntervalsMap.put(frame, insertionIntervals);
+        }
+        return insertionIntervals;
+    }
+
+    private void renderInsertionIntervals(RenderContext context, Rectangle rect) {
+
+        // Might be offscreen
+        if (!context.getVisibleRect().intersects(rect)) return;
+
+        List<InsertionMarker> intervals = context.getInsertionMarkers();
+        if (intervals == null) return;
+
+        InsertionMarker selected = InsertionManager.getInstance().getSelectedInsertion(context.getChr());
+
+        int w = (int) ((1.41 * rect.height) / 2);
+
+        List<InsertionInterval> insertionIntervals = getInsertionIntervals(context.getReferenceFrame());
+
+        for (InsertionMarker insertionMarker : intervals) {
+            final double scale = context.getScale();
+            final double origin = context.getOrigin();
+            int midpoint = (int) ((insertionMarker.position - origin) / scale);
+            int x0 = midpoint - w;
+            int x1 = midpoint + w;
+
+            Rectangle iRect = new Rectangle(x0 + context.translateX, rect.y, 2 * w, rect.height);
+
+            insertionIntervals.add(new InsertionInterval(iRect, insertionMarker));
+
+            Color c = (selected != null && selected.position == insertionMarker.position) ? Color.red : AlignmentRenderer.purple;
+            Graphics2D g = context.getGraphic2DForColor(c);
+
+
+            g.fillPolygon(new Polygon(new int[]{x0, x1, midpoint},
+                    new int[]{rect.y, rect.y, rect.y + rect.height}, 3));
+        }
+    }
+
 
     private void renderAlignments(RenderContext context, Rectangle inputRect) {
 
@@ -418,11 +509,9 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
         if (getDisplayMode() == DisplayMode.EXPANDED) {
             h = expandedHeight;
-        }
-        else if (getDisplayMode() == DisplayMode.COLLAPSED) {
+        } else if (getDisplayMode() == DisplayMode.COLLAPSED) {
             h = collapsedHeight;
-        }
-        else {
+        } else {
 
             int visHeight = visibleRect.height;
             int depth = dataManager.getNLevels();
@@ -455,7 +544,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
                 if (y + h > visibleRect.getY()) {
                     Rectangle rowRectangle = new Rectangle(inputRect.x, (int) y, inputRect.width, (int) h);
-                    AlignmentCounts alignmentCounts = dataManager.getLoadedInterval(context.getReferenceFrame().getCurrentRange()).getCounts();
+                    AlignmentCounts alignmentCounts = dataManager.getLoadedInterval(context.getReferenceFrame()).getCounts();
                     renderer.renderAlignments(row.alignments, context, rowRectangle,
                             inputRect, renderOptions, leaveMargin, selectedReadNames, alignmentCounts);
                     row.y = y;
@@ -498,6 +587,135 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
         }
     }
+
+
+    public void renderExpandedInsertion(InsertionMarker insertionMarker, RenderContext context, Rectangle inputRect) {
+
+
+        boolean leaveMargin = getDisplayMode() != DisplayMode.COLLAPSED.SQUISHED;
+
+        inputRect.y += DS_MARGIN_0 + DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_0 + INSERTION_ROW_HEIGHT + DS_MARGIN_2;
+
+        //log.debug("Render features");
+        PackedAlignments groups = dataManager.getGroups(context, renderOptions);
+        if (groups == null) {
+            //Assume we are still loading.
+            //This might not always be true
+            return;
+        }
+
+        Rectangle visibleRect = context.getVisibleRect();
+
+
+        maximumHeight = Integer.MAX_VALUE;
+
+        // Divide rectangle into equal height levels
+        double y = inputRect.getY();
+        double h;
+        if (getDisplayMode() == DisplayMode.EXPANDED) {
+            h = expandedHeight;
+        } else {
+
+            int visHeight = visibleRect.height;
+            int depth = dataManager.getNLevels();
+            if (depth == 0) {
+                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, expandedHeight));
+            } else {
+                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, Math.min(expandedHeight, visHeight / depth)));
+            }
+            h = squishedHeight;
+        }
+
+
+        for (Map.Entry<String, List<Row>> entry : groups.entrySet()) {
+
+
+            // Loop through the alignment rows for this group
+            List<Row> rows = entry.getValue();
+            for (Row row : rows) {
+                if ((visibleRect != null && y > visibleRect.getMaxY())) {
+                    return;
+                }
+
+                if (y + h > visibleRect.getY()) {
+                    Rectangle rowRectangle = new Rectangle(inputRect.x, (int) y, inputRect.width, (int) h);
+                    renderer.renderExpandedInsertion(insertionMarker, row.alignments, context, rowRectangle, leaveMargin);
+                    row.y = y;
+                    row.h = h;
+                }
+                y += h;
+            }
+
+            y += GROUP_MARGIN;
+
+
+        }
+
+    }
+
+//
+//    public void renderExpandedInsertions(RenderContext context, Rectangle inputRect) {
+//
+//
+//        boolean leaveMargin = getDisplayMode() != DisplayMode.COLLAPSED.SQUISHED;
+//
+//        inputRect.y += DOWNAMPLED_ROW_HEIGHT + DS_MARGIN_2;
+//
+//        //log.debug("Render features");
+//        PackedAlignments groups = dataManager.getGroups(context, renderOptions);
+//        if (groups == null) {
+//            //Assume we are still loading.
+//            //This might not always be true
+//            return;
+//        }
+//
+//        Rectangle visibleRect = context.getVisibleRect();
+//
+//
+//        maximumHeight = Integer.MAX_VALUE;
+//
+//        // Divide rectangle into equal height levels
+//        double y = inputRect.getY();
+//        double h;
+//        if (getDisplayMode() == DisplayMode.EXPANDED) {
+//            h = expandedHeight;
+//        } else {
+//
+//            int visHeight = visibleRect.height;
+//            int depth = dataManager.getNLevels();
+//            if (depth == 0) {
+//                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, expandedHeight));
+//            } else {
+//                squishedHeight = Math.min(maxSquishedHeight, Math.max(1, Math.min(expandedHeight, visHeight / depth)));
+//            }
+//            h = squishedHeight;
+//        }
+//
+//
+//        for (Map.Entry<String, List<Row>> entry : groups.entrySet()) {
+//
+//
+//            // Loop through the alignment rows for this group
+//            List<Row> rows = entry.getValue();
+//            for (Row row : rows) {
+//                if ((visibleRect != null && y > visibleRect.getMaxY())) {
+//                    return;
+//                }
+//
+//                if (y + h > visibleRect.getY()) {
+//                    Rectangle rowRectangle = new Rectangle(inputRect.x, (int) y, inputRect.width, (int) h);
+//                    renderer.renderExpandedInsertions(row.alignments, context, rowRectangle, leaveMargin);
+//                    row.y = y;
+//                    row.h = h;
+//                }
+//                y += h;
+//            }
+//
+//            y += GROUP_MARGIN;
+//
+//
+//        }
+//    }
 
     /**
      * Sort alignment rows based on alignments that intersect location
@@ -606,7 +824,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
                 List<String> loci = null;
                 if (FrameManager.isGeneListMode()) {
-                    loci = new ArrayList<String>(FrameManager.getFrames().size());
+                    loci = new ArrayList<>(FrameManager.getFrames().size());
                     for (ReferenceFrame ref : FrameManager.getFrames()) {
                         //If the frame-name is a locus, we use it unaltered
                         //Don't want to reprocess, easy to get off-by-one
@@ -672,7 +890,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     public String getValueStringAt(String chr, double position, int mouseX, int mouseY, ReferenceFrame frame) {
 
         if (downsampleRect != null && mouseY > downsampleRect.y && mouseY <= downsampleRect.y + downsampleRect.height) {
-            AlignmentInterval loadedInterval = dataManager.getLoadedInterval(frame.getCurrentRange());
+            AlignmentInterval loadedInterval = dataManager.getLoadedInterval(frame);
             if (loadedInterval == null) {
                 return null;
             } else {
@@ -684,19 +902,26 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 return null;
             }
         } else {
-            Alignment feature = getAlignmentAt(position, mouseY, frame);
-            if (feature != null) {
-                return feature.getValueString(position, mouseX, getWindowFunction());
+
+            InsertionInterval insertionInterval = getInsertionInterval(frame, mouseX, mouseY);
+            if (insertionInterval != null) {
+                return "Insertions (" + insertionInterval.insertionMarker.size + " bases)";
             } else {
-                for (Map.Entry<Rectangle, String> groupNameEntry : groupNames.entrySet()) {
-                    Rectangle r = groupNameEntry.getKey();
-                    if (mouseY >= r.y && mouseY < r.y + r.height) {
-                        return groupNameEntry.getValue();
+                Alignment feature = getAlignmentAt(position, mouseY, frame);
+                if (feature != null) {
+                    return feature.getValueString(position, mouseX, getWindowFunction());
+                } else {
+                    for (Map.Entry<Rectangle, String> groupNameEntry : groupNames.entrySet()) {
+                        Rectangle r = groupNameEntry.getKey();
+                        if (mouseY >= r.y && mouseY < r.y + r.height) {
+                            return groupNameEntry.getValue();
+                        }
                     }
                 }
             }
-            return null;
+
         }
+        return null;
     }
 
 
@@ -813,6 +1038,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
     @Override
     public boolean handleDataClick(TrackClickEvent te) {
+
         MouseEvent e = te.getMouseEvent();
         if (Globals.IS_MAC && e.isMetaDown() || (!Globals.IS_MAC && e.isControlDown())) {
             // Selection
@@ -824,11 +1050,30 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 }
                 return true;
             }
-
         }
+
+        InsertionInterval insertionInterval = getInsertionInterval(te.getFrame(), te.getMouseEvent().getX(), te.getMouseEvent().getY());
+        if (insertionInterval != null) {
+
+            final String chrName = te.getFrame().getChrName();
+            InsertionMarker currentSelection = InsertionManager.getInstance().getSelectedInsertion(chrName);
+            if (currentSelection != null && currentSelection.position == insertionInterval.insertionMarker.position) {
+                InsertionManager.getInstance().clearSelected();
+            } else {
+                InsertionManager.getInstance().setSelected(chrName, insertionInterval.insertionMarker.position);
+            }
+
+            IGVEventBus.getInstance().post(new InsertionSelectionEvent(insertionInterval.insertionMarker));
+
+            return true;
+        }
+
+
         if (IGV.getInstance().isShowDetailsOnClick()) {
             openTooltipWindow(te);
+            return true;
         }
+
         return false;
     }
 
@@ -843,7 +1088,15 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             }
 
         }
+    }
 
+    private InsertionInterval getInsertionInterval(ReferenceFrame frame, int x, int y) {
+        List<InsertionInterval> insertionIntervals = getInsertionIntervals(frame);
+        for (InsertionInterval i : insertionIntervals) {
+            if (i.rect.contains(x, y)) return i;
+        }
+
+        return null;
     }
 
     private void setSelected(Alignment alignment) {
@@ -858,7 +1111,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
     public static void refresh() {
         IGV.getInstance().getContentPane().getMainPanel().invalidate();
-        IGV.getInstance().repaintDataPanels();
+        IGV.getInstance().revalidateTrackPanels();
     }
 
     public static boolean isBisulfiteColorType(ColorOption o) {
@@ -1067,7 +1320,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
             peStats = new HashMap<String, PEStats>();
 
-           linkedReads = prefs.getAsBoolean(PreferenceManager.SAM_LINK_READS);
+            linkedReads = prefs.getAsBoolean(PreferenceManager.SAM_LINK_READS);
             linkByTag = prefs.get(PreferenceManager.SAM_LINK_TAG);
         }
 
@@ -1192,15 +1445,13 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         public void setGroupByPos(String pos) {
             if (pos == null) {
                 this.groupByPos = null;
-            }
-            else {
+            } else {
                 String[] posParts = pos.split(" ");
                 if (posParts.length != 2) {
                     this.groupByPos = null;
-                }
-                else {
+                } else {
                     int posChromStart = Integer.valueOf(posParts[1]);
-                    this.groupByPos = new Range(posParts[0], posChromStart, posChromStart+1);
+                    this.groupByPos = new Range(posParts[0], posChromStart, posChromStart + 1);
                 }
             }
         }
@@ -1251,6 +1502,9 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             addSeparator();
             add(TrackMenuUtils.getTrackRenameItem(tracks));
             addCopyToClipboardItem(e);
+
+            //         addSeparator();
+            //          addExpandInsertions();
 
             if (dataManager.isTenX()) {
                 addTenXItems();
@@ -1313,6 +1567,20 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
         }
 
+        public JMenuItem addExpandInsertions() {
+
+            final JMenuItem item = new JCheckBoxMenuItem("Expand insertions");
+            final Session session = IGV.getInstance().getSession();
+            item.setSelected(session.expandInsertions);
+
+            item.addActionListener(aEvt -> {
+                session.expandInsertions = !session.expandInsertions;
+                refresh();
+            });
+            add(item);
+            return item;
+        }
+
         /**
          * Item for exporting "consensus" sequence of region, based
          * on loaded alignments.
@@ -1348,7 +1616,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                         MessageUtils.showMessage("Cannot export region more than 1 Megabase");
                         return;
                     }
-                    AlignmentInterval interval = dataManager.getLoadedInterval(frame.getCurrentRange());
+                    AlignmentInterval interval = dataManager.getLoadedInterval(frame);
                     AlignmentCounts counts = interval.getCounts();
                     String text = PFMExporter.createPFMText(counts, frame.getChrName(), start, end);
                     StringUtils.copyTextToClipboard(text);
@@ -1442,7 +1710,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
         public void addGroupMenuItem(final TrackClickEvent te) {//ReferenceFrame frame) {
             final MouseEvent me = te.getMouseEvent();
             ReferenceFrame frame = te.getFrame();
-            if(frame == null) {
+            if (frame == null) {
                 frame = FrameManager.getDefaultFrame();  // Clicked over name panel, not a specific frame
             }
             final Range range = frame.getCurrentRange();
@@ -1771,11 +2039,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
                 }
 
                 final Alignment alignment = clickedAlignment;
-                item.addActionListener(new ActionListener() {
-                    public void actionPerformed(ActionEvent aEvt) {
-                        splitScreenMate(te, alignment);
-                    }
-                });
+                item.addActionListener(aEvt -> splitScreenMate(te, alignment));
                 if (alignment == null || !alignment.isPaired() || !alignment.getMate().isMapped()) {
                     item.setEnabled(false);
                 }
@@ -1882,74 +2146,29 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
         public void addShadeBaseByMenuItem() {
 
-            if (ionTorrent) {
-                JMenu groupMenu = new JMenu("Shade bases by...");
-                ButtonGroup group = new ButtonGroup();
-
-                Map<String, ShadeBasesOption> mappings = new LinkedHashMap<String, ShadeBasesOption>();
-                mappings.put("none", ShadeBasesOption.NONE);
-                mappings.put("quality", ShadeBasesOption.QUALITY);
-
-                for (Map.Entry<String, ShadeBasesOption> el : mappings.entrySet()) {
-                    JCheckBoxMenuItem mi = getShadeBasesMenuItem(el.getKey(), el.getValue());
-                    groupMenu.add(mi);
-                    group.add(mi);
-                }
-
-                add(groupMenu);
-            } else {
-                final JMenuItem item = new JCheckBoxMenuItem("Shade base by quality");
-                item.setSelected(renderOptions.shadeBasesOption == ShadeBasesOption.QUALITY);
-                item.addActionListener(new ActionListener() {
-
-                    public void actionPerformed(ActionEvent aEvt) {
-                        UIUtilities.invokeOnEventThread(new Runnable() {
-
-                            public void run() {
-                                if (item.isSelected()) {
-                                    renderOptions.shadeBasesOption = ShadeBasesOption.QUALITY;
-                                } else {
-                                    renderOptions.shadeBasesOption = ShadeBasesOption.NONE;
-                                }
-                                refresh();
-                            }
-                        });
-                    }
-                });
-
-                add(item);
-            }
-
-        }
-
-        private JCheckBoxMenuItem getShadeBasesMenuItem(String label, final ShadeBasesOption option) {
-            final JCheckBoxMenuItem mi = new JCheckBoxMenuItem(label);
-            mi.setSelected(renderOptions.shadeBasesOption == option);
-
-            if (option == ShadeBasesOption.NONE) {
-                mi.setSelected(renderOptions.shadeBasesOption == null || renderOptions.shadeBasesOption == option);
-            }
-            mi.addActionListener(new ActionListener() {
+            final JMenuItem item = new JCheckBoxMenuItem("Shade base by quality");
+            item.setSelected(renderOptions.shadeBasesOption == ShadeBasesOption.QUALITY);
+            item.addActionListener(new ActionListener() {
 
                 public void actionPerformed(ActionEvent aEvt) {
                     UIUtilities.invokeOnEventThread(new Runnable() {
 
                         public void run() {
-                            if (mi.isSelected()) {
-                                renderOptions.shadeBasesOption = option;
+                            if (item.isSelected()) {
+                                renderOptions.shadeBasesOption = ShadeBasesOption.QUALITY;
                             } else {
                                 renderOptions.shadeBasesOption = ShadeBasesOption.NONE;
                             }
                             refresh();
                         }
                     });
-
                 }
             });
 
-            return mi;
-        }
+            add(item);
 
+
+        }
 
         public void addShowItems() {
 
@@ -2042,7 +2261,7 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
             final JMenuItem item = new JMenuItem("Blat read sequence");
             add(item);
 
-            Alignment alignment = getSpecficAlignment(te);
+            final Alignment alignment = getSpecficAlignment(te);
             if (alignment == null) {
                 item.setEnabled(false);
                 return;
@@ -2057,7 +2276,9 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
 
             item.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent aEvt) {
-                    BlatClient.doBlatQuery(seq);
+                    String blatSeq = alignment.getReadStrand() == Strand.NEGATIVE ?
+                            SequenceTrack.getReverseComplement(seq) : seq;
+                    BlatClient.doBlatQuery(blatSeq);
                 }
             });
 
@@ -2208,5 +2429,16 @@ public class AlignmentTrack extends AbstractTrack implements AlignmentTrackEvent
     @SubtlyImportant
     private static AlignmentTrack getNextTrack() {
         return (AlignmentTrack) IGVSessionReader.getNextTrack();
+    }
+
+    private static class InsertionInterval {
+
+        Rectangle rect;
+        InsertionMarker insertionMarker;
+
+        public InsertionInterval(Rectangle rect, InsertionMarker insertionMarker) {
+            this.rect = rect;
+            this.insertionMarker = insertionMarker;
+        }
     }
 }

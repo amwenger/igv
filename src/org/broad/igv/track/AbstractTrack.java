@@ -251,11 +251,6 @@ public abstract class AbstractTrack implements Track {
     }
 
     @Override
-    public void load(ReferenceFrame referenceFrame) {
-        // No-op, to be overriden by subclasses
-    }
-
-    @Override
     public boolean isFilterable() {
         return true;   // True by default
     }
@@ -967,7 +962,15 @@ public abstract class AbstractTrack implements Track {
 
 
     public String getNameValueString(int y) {
-        return getName();
+
+        StringBuffer buffer = new StringBuffer();
+        buffer.append("<html>" + getName());
+
+        if(resourceLocator != null && resourceLocator.getPath() != null) {
+            buffer.append("<br>" + this.resourceLocator.getPath());
+        }
+
+        return buffer.toString();
     }
 
     /**

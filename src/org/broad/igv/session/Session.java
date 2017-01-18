@@ -32,6 +32,7 @@ import org.broad.igv.feature.Range;
 import org.broad.igv.feature.RegionOfInterest;
 import org.broad.igv.lists.GeneList;
 import org.broad.igv.renderer.ContinuousColorScale;
+import org.broad.igv.sam.InsertionManager;
 import org.broad.igv.track.AttributeManager;
 import org.broad.igv.track.TrackType;
 import org.broad.igv.ui.IGV;
@@ -60,6 +61,7 @@ public class Session implements IGVEventObserver {
     private int version;
     private String path;
     private String groupTracksBy;
+    public  boolean expandInsertions = false; //false;
     private int nextAutoscaleGroup;
     private ReferenceFrame referenceFrame = FrameManager.getDefaultFrame();
     private TrackFilter filter;
@@ -92,12 +94,11 @@ public class Session implements IGVEventObserver {
 
         this.path = path;
         this.nextAutoscaleGroup = 1;
-        regionsOfInterest = new LinkedHashMap<String, Collection<RegionOfInterest>>();
-        regionsOfInterestObservable =
-                new ObservableForObject<Map<String, Collection<RegionOfInterest>>>(regionsOfInterest);
+        regionsOfInterest = new LinkedHashMap<>();
+        regionsOfInterestObservable = new ObservableForObject<>(regionsOfInterest);
 
-        preferences = new HashMap<String, String>();
-        colorScales = new HashMap<TrackType, ContinuousColorScale>();
+        preferences = new HashMap<>();
+        colorScales = new HashMap<>();
         history = new History(100);
 
         boolean resetRequired = FrameManager.getFrames().size() > 1;
@@ -105,6 +106,8 @@ public class Session implements IGVEventObserver {
         if (resetRequired) {
             IGV.getInstance().resetFrames();
         }
+
+        InsertionManager.getInstance().clear();
         FrameManager.getDefaultFrame().getEventBus().subscribe(ViewChange.class, this);
     }
 
@@ -137,6 +140,10 @@ public class Session implements IGVEventObserver {
     public void recordHistory() {
         final ReferenceFrame defaultFrame = FrameManager.getDefaultFrame();
         history.push(defaultFrame.getFormattedLocusString(), defaultFrame.getZoom());
+    }
+
+    public void clearHistory() {
+        history.clear();
     }
 
     public String getSessionVersion() {
