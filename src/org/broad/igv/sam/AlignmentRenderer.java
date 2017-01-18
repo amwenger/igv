@@ -72,7 +72,7 @@ public class AlignmentRenderer {
     private static Color clippedColor = new Color(255, 20, 147);
 
     // Indel colors
-    private static Color purple = new Color(118, 24, 220);
+    public static Color purple = new Color(118, 24, 220);
     private static Color purple1 = purple;
     private static Color purple2 = new Color(218, 112, 214);
     private static Color purple3 = new Color(223, 111, 161);

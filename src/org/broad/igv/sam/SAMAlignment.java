@@ -522,12 +522,12 @@ public abstract class SAMAlignment implements Alignment {
                                 "T " + new String(new char[(int) (pt*100)]).replace("\0", "*") + " " + Globals.DECIMAL_FORMAT.format(t) + " (" + Pformatter.format(pt*100)  + "%)\n" +
                                 "</pre>" +
                                 "<pre>" + lineWrapString(new String(bases), 80) + "</pre>");
-                            int len = bases.length;
                             buf.append("Insertion: " + new String(Arrays.copyOfRange(bases, 0, 25)) + "..." +
                                     new String(Arrays.copyOfRange(bases, len - 25, len)));
+                        }
                     }
+                    return buf.toString();
                 }
-                return buf.toString();
             }
         }
 
