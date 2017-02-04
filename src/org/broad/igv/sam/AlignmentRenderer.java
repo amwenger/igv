@@ -74,7 +74,7 @@ public class AlignmentRenderer {
     // Indel colors
     public static Color purple = new Color(118, 24, 220);
     private static Color purple1 = purple;
-    private static Color purple2 = new Color(218, 112, 214);
+    private static Color purple2 = purple; // new Color(218, 112, 214);
     private static Color purple3 = new Color(223, 111, 161);
     private static Color deletionColor = Color.black;
     private static Color skippedColor = new Color(150, 184, 200);
