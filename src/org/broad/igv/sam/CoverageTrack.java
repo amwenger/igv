@@ -31,12 +31,13 @@ package org.broad.igv.sam;
 
 import org.apache.log4j.Logger;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.data.CoverageDataSource;
 import org.broad.igv.feature.FeatureUtils;
 import org.broad.igv.feature.LocusScore;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.goby.GobyCountArchiveDataSource;
+import org.broad.igv.prefs.IGVPreferences;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.renderer.BarChartRenderer;
 import org.broad.igv.renderer.DataRange;
 import org.broad.igv.renderer.DataRenderer;
@@ -71,6 +72,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import static org.broad.igv.prefs.Constants.*;
+
 /**
  * @author jrobinso
  */
@@ -103,7 +106,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
     private CoverageDataSource dataSource;
     private DataRenderer dataSourceRenderer;
     private IntervalRenderer intervalRenderer;
-    private PreferenceManager prefs;
+    private IGVPreferences prefs;
     private JMenuItem dataRangeItem;
     private Genome genome;
     private boolean removed = false;
@@ -143,8 +146,8 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
         setColor(coverageGrey);
 
-        prefs = PreferenceManager.getInstance();
-        snpThreshold = prefs.getAsFloat(PreferenceManager.SAM_ALLELE_THRESHOLD);
+        prefs = PreferencesManager.getPreferences();
+        snpThreshold = prefs.getAsFloat(SAM_ALLELE_THRESHOLD);
         autoScale = DEFAULT_AUTOSCALE;
         showReference = DEFAULT_SHOW_REFERENCE;
         //TODO  logScale = prefs.
@@ -239,7 +242,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
     public void drawData(RenderContext context, Rectangle rect) {
 
-        float maxRange = PreferenceManager.getInstance().getAsFloat(PreferenceManager.SAM_MAX_VISIBLE_RANGE);
+        float maxRange = PreferencesManager.getPreferences().getAsFloat(SAM_MAX_VISIBLE_RANGE);
         float minVisibleScale = (maxRange * 1000) / 700;
 
         if (context.getScale() < minVisibleScale && !context.getChr().equals(Globals.CHR_ALL)) {
@@ -362,7 +365,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
     public String getValueStringAt(String chr, double position, int mouseX, int mouseY, ReferenceFrame frame) {
 
-        float maxRange = PreferenceManager.getInstance().getAsFloat(PreferenceManager.SAM_MAX_VISIBLE_RANGE);
+        float maxRange = PreferencesManager.getPreferences().getAsFloat(SAM_MAX_VISIBLE_RANGE);
         float minVisibleScale = (maxRange * 1000) / 700;
 
         StringBuffer buf = new StringBuffer();
@@ -758,12 +761,12 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
     private Color getShadedColor(int qual, Color backgroundColor, Color color) {
         float alpha = 0;
-        int minQ = prefs.getAsInt(PreferenceManager.SAM_BASE_QUALITY_MIN);
+        int minQ = prefs.getAsInt(SAM_BASE_QUALITY_MIN);
         ColorUtilities.getRGBColorComponents(color);
         if (qual < minQ) {
             alpha = 0.1f;
         } else {
-            int maxQ = prefs.getAsInt(PreferenceManager.SAM_BASE_QUALITY_MAX);
+            int maxQ = prefs.getAsInt(SAM_BASE_QUALITY_MAX);
             alpha = Math.max(0.1f, Math.min(1.0f, 0.1f + 0.9f * (qual - minQ) / (maxQ - minQ)));
         }
         // Round alpha to nearest 0.1, for effeciency;
@@ -946,7 +949,7 @@ public class CoverageTrack extends AbstractTrack implements ScalableTrack {
 
             public void actionPerformed(ActionEvent e) {
 
-                final PreferenceManager prefs = PreferenceManager.getInstance();
+                final IGVPreferences prefs = PreferencesManager.getPreferences();
                 File initDirectory = prefs.getLastTrackDirectory();
                 File file = FileDialogUtils.chooseFile("Select coverage file", initDirectory, FileDialog.LOAD);
                 if (file != null) {

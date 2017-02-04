@@ -25,16 +25,18 @@
 
 package org.broad.igv.track;
 
+import htsjdk.tribble.Feature;
+import htsjdk.tribble.TribbleException;
 import org.apache.log4j.Logger;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.cli_plugin.PluginFeatureSource;
 import org.broad.igv.cli_plugin.PluginSource;
 import org.broad.igv.feature.*;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.Constants;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.renderer.*;
-import org.broad.igv.renderer.Renderer;
 import org.broad.igv.session.IGVSessionReader;
 import org.broad.igv.session.SubtlyImportant;
 import org.broad.igv.tools.FeatureSearcher;
@@ -44,13 +46,12 @@ import org.broad.igv.ui.UIConstants;
 import org.broad.igv.ui.event.DataLoadedEvent;
 import org.broad.igv.ui.event.IGVEventBus;
 import org.broad.igv.ui.event.IGVEventObserver;
-import org.broad.igv.ui.event.ViewChange;
 import org.broad.igv.ui.panel.ReferenceFrame;
 import org.broad.igv.ui.util.MessageUtils;
-import org.broad.igv.util.*;
+import org.broad.igv.util.BrowserLauncher;
+import org.broad.igv.util.ResourceLocator;
+import org.broad.igv.util.StringUtils;
 import org.broad.igv.variant.VariantTrack;
-import htsjdk.tribble.Feature;
-import htsjdk.tribble.TribbleException;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -218,7 +219,7 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
 
         int sourceFeatureWindowSize = source.getFeatureWindowSize();
         if (sourceFeatureWindowSize > 0) {  // Only apply a default if the feature source supports visibility window.
-            int defVisibilityWindow = PreferenceManager.getInstance().getAsInt(PreferenceManager.DEFAULT_VISIBILITY_WINDOW);
+            int defVisibilityWindow = PreferencesManager.getPreferences().getAsInt(Constants.DEFAULT_VISIBILITY_WINDOW);
             if (defVisibilityWindow > 0) {
                 setVisibilityWindow(defVisibilityWindow * 1000);
             } else {
@@ -693,10 +694,6 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
     }
 
     public void load(ReferenceFrame frame) {
-        PackedFeatures packedFeatures = packedFeaturesMap.get(frame.getName());
-        String chr = frame.getChrName();
-        int start = (int) frame.getOrigin();
-        int end = (int) frame.getEnd();
         loadFeatures(frame.getChrName(), (int) frame.getOrigin(), (int) frame.getEnd(), frame);
     }
 
@@ -707,7 +704,7 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
      * @param start
      * @param end
      */
-    protected void loadFeatures(final String chr, final int start, final int end, final ReferenceFrame referenceFrame) {
+    protected void loadFeatures(final String chr, final int start, final int end, final ReferenceFrame frame) {
 
         try {
 
@@ -729,18 +726,20 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
             }
 
             Iterator<Feature> iter = source.getFeatures(chr, expandedStart, expandedEnd);
+
             if (iter == null) {
                 PackedFeatures pf = new PackedFeatures(chr, expandedStart, expandedEnd);
-                packedFeaturesMap.put(referenceFrame.getName(), pf);
+                packedFeaturesMap.put(frame.getName(), pf);
             } else {
                 PackedFeatures pf = new PackedFeatures(chr, expandedStart, expandedEnd, iter, getName());
-                packedFeaturesMap.put(referenceFrame.getName(), pf);
+                packedFeaturesMap.put(frame.getName(), pf);
+                log.info("Loaded " + chr + " " + expandedStart + "-" + expandedEnd);
             }
 
         } catch (Exception e) {
             // Mark the interval with an empty feature list to prevent an endless loop of load attempts.
             PackedFeatures pf = new PackedFeatures(chr, start, end);
-            packedFeaturesMap.put(referenceFrame.getName(), pf);
+            packedFeaturesMap.put(frame.getName(), pf);
             String msg = "Error loading features for interval: " + chr + ":" + start + "-" + end + " <br>" + e.toString();
             MessageUtils.showMessage(msg);
             log.error(msg, e);
@@ -849,9 +848,6 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
             log.trace(msg);
         }
 
-        //Attempt to load the relevant data. Note that there is no guarantee
-        //the data will be loaded once preload exits, as loading may be asynchronous
-        load(context.getReferenceFrame());
         PackedFeatures packedFeatures = packedFeaturesMap.get(context.getReferenceFrame().getName());
 
         if (packedFeatures == null || !packedFeatures.overlapsInterval(context.getChr(), (int) context.getOrigin(), (int) context.getEndLocation() + 1)) {

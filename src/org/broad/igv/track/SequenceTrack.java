@@ -30,10 +30,13 @@ package org.broad.igv.track;
 
 import org.apache.log4j.Logger;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
-import org.broad.igv.feature.*;
+import org.broad.igv.feature.AminoAcidManager;
+import org.broad.igv.feature.AminoAcidSequence;
+import org.broad.igv.feature.Chromosome;
+import org.broad.igv.feature.Strand;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.renderer.GraphicUtils;
 import org.broad.igv.renderer.Renderer;
 import org.broad.igv.renderer.SequenceRenderer;
@@ -44,14 +47,20 @@ import org.broad.igv.ui.event.IGVEventObserver;
 import org.broad.igv.ui.panel.FrameManager;
 import org.broad.igv.ui.panel.IGVPopupMenu;
 import org.broad.igv.ui.panel.ReferenceFrame;
+import org.broad.igv.ui.util.UIUtilities;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
-import java.util.*;
-import java.util.List;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.broad.igv.prefs.Constants.MAX_SEQUENCE_RESOLUTION;
+import static org.broad.igv.prefs.Constants.SHOW_SEQUENCE_TRANSLATION;
 
 
 /**
@@ -65,19 +74,14 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
 
     private static String NAME = "Sequence";
 
-    /**
-     * Map of reference frame -> cached sequence.  Need a map to support gene lists
-     */
     private Map<String, LoadedDataInterval<SeqCache>> loadedIntervalCache = new HashMap(200);
 
+    private Map<String, Boolean> sequenceVisible;
 
     private SequenceRenderer sequenceRenderer = new SequenceRenderer();
 
     //should translated aminoacids be shown below the sequence?
     private boolean shouldShowTranslation = true;
-
-    //is sequence visible (zoomed in far enough, etc)
-    private boolean sequenceVisible = false;
 
     Strand strand = Strand.POSITIVE;
 
@@ -86,8 +90,9 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
     public SequenceTrack(String name) {
         super(name);
         setSortable(false);
-        shouldShowTranslation = PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SHOW_SEQUENCE_TRANSLATION);
+        shouldShowTranslation = PreferencesManager.getPreferences().getAsBoolean(SHOW_SEQUENCE_TRANSLATION);
         loadedIntervalCache = Collections.synchronizedMap(new HashMap<>());
+        sequenceVisible = Collections.synchronizedMap(new HashMap<>());
         IGVEventBus.getInstance().subscribe(FrameManager.ChangeEvent.class, this);
     }
 
@@ -150,7 +155,10 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
     public void renderName(Graphics2D graphics, Rectangle trackRectangle, Rectangle visibleRectangle) {
 
         Font font = FontManager.getFont(fontSize);
-        if (sequenceVisible) {
+
+        boolean visible = this.sequenceVisible.values().stream().anyMatch(v -> v==true);
+
+        if (visible) {
             graphics.setFont(font);
             int textBaseline = trackRectangle.y + 12;
             graphics.drawString(NAME, trackRectangle.x + 5, textBaseline);
@@ -179,7 +187,7 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
     @Override
     public boolean isReadyToPaint(ReferenceFrame frame) {
 
-        int resolutionThreshold = PreferenceManager.getInstance().getAsInt(PreferenceManager.MAX_SEQUENCE_RESOLUTION);
+        int resolutionThreshold = PreferencesManager.getPreferences().getAsInt(MAX_SEQUENCE_RESOLUTION);
         boolean visible = frame.getScale() < resolutionThreshold && !frame.getChrName().equals(Globals.CHR_ALL);
 
         if (!visible) {
@@ -244,17 +252,20 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
      */
     public void render(RenderContext context, Rectangle rect) {
 
-        int resolutionThreshold = PreferenceManager.getInstance().getAsInt(PreferenceManager.MAX_SEQUENCE_RESOLUTION);
+        int resolutionThreshold = PreferencesManager.getPreferences().getAsInt(MAX_SEQUENCE_RESOLUTION);
 
         boolean visible = context.getReferenceFrame().getScale() < resolutionThreshold &&
                 !context.getChr().equals(Globals.CHR_ALL);
+        final String frameName = context.getReferenceFrame().getName();
 
-        if (visible != sequenceVisible) {
-            sequenceVisible = visible;
-            IGV.getInstance().doRefresh();  // <= TODO needed to expand/contract track.  Find less disruptive method.
+        if(!sequenceVisible.containsKey(frameName)) sequenceVisible.put(frameName, false);  // Default value
+
+        if (visible != sequenceVisible.get(frameName)) {
+            sequenceVisible.put(frameName, visible);
+            UIUtilities.invokeAndWaitOnEventThread(() -> context.getPanel().revalidate());
         }
-        if (sequenceVisible) {
-            LoadedDataInterval<SeqCache> sequenceInterval = loadedIntervalCache.get(context.getReferenceFrame().getName());
+        if (visible) {
+            LoadedDataInterval<SeqCache> sequenceInterval = loadedIntervalCache.get(frameName);
             if (sequenceInterval != null) {
                 sequenceRenderer.setStrand(strand);
                 sequenceRenderer.draw(sequenceInterval, context, rect, shouldShowTranslation, resolutionThreshold);
@@ -265,21 +276,22 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
 
     @Override
     public int getHeight() {
-        return sequenceVisible ? SEQUENCE_HEIGHT +
+        boolean visible = this.sequenceVisible.values().stream().anyMatch(v -> v==true);
+        return visible ? SEQUENCE_HEIGHT +
                 (shouldShowTranslation ? SequenceRenderer.TranslatedSequenceDrawer.TOTAL_HEIGHT : 0) :
                 0;
     }
 
-//
-//    @Override
-//    public boolean handleDataClick(TrackClickEvent e) {
-////        setShouldShowTranslation(!shouldShowTranslation);
-////        Object source = e.getMouseEvent().getSource();
-////        if (source instanceof JComponent) {
-////            repaint();
-////        }
-////        return true;
-//    }
+
+    @Override
+    public boolean handleDataClick(TrackClickEvent e) {
+        setShouldShowTranslation(!shouldShowTranslation);
+        Object source = e.getMouseEvent().getSource();
+        if (source instanceof JComponent) {
+            UIUtilities.invokeOnEventThread(() -> repaint());
+        }
+        return true;
+    }
 
     @Override
     public void handleNameClick(final MouseEvent e) {
@@ -299,7 +311,7 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
     public void setShouldShowTranslation(boolean shouldShowTranslation) {
         this.shouldShowTranslation = shouldShowTranslation;
         // Remember this choice
-        PreferenceManager.getInstance().put(PreferenceManager.SHOW_SEQUENCE_TRANSLATION, shouldShowTranslation);
+        PreferencesManager.getPreferences().put(SHOW_SEQUENCE_TRANSLATION, shouldShowTranslation);
     }
 
 

@@ -33,13 +33,14 @@
  */
 package org.broad.igv.feature.genome;
 
-import com.google.common.collect.Iterables;
+import htsjdk.tribble.util.ParsingUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
 import org.broad.igv.DirectoryManager;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.*;
+import org.broad.igv.prefs.Constants;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.track.*;
 import org.broad.igv.ui.IGV;
 import org.broad.igv.ui.IGVMenuBar;
@@ -49,9 +50,9 @@ import org.broad.igv.ui.panel.FrameManager;
 import org.broad.igv.ui.util.ConfirmDialog;
 import org.broad.igv.ui.util.MessageUtils;
 import org.broad.igv.ui.util.ProgressMonitor;
+import org.broad.igv.ui.util.UIUtilities;
 import org.broad.igv.util.*;
 import org.broad.igv.util.collections.CI;
-import htsjdk.tribble.util.ParsingUtils;
 
 import java.awt.*;
 import java.io.*;
@@ -119,11 +120,11 @@ public class GenomeManager {
 
     public void setCurrentGenome(Genome genome) {
         if (genome != null) {
-            PreferenceManager.getInstance().setDefaultGenome(genome.getId());
+            PreferencesManager.getPreferences().setDefaultGenome(genome.getId());
         }
         this.currentGenome = genome;
         if (genome != null) {
-            if(IGV.hasInstance()) {
+            if (IGV.hasInstance()) {
                 IGV.getInstance().getSession().clearHistory();
                 FrameManager.getDefaultFrame().setChromosomeName(genome.getHomeChromosome(), true);
             }
@@ -142,18 +143,12 @@ public class GenomeManager {
             return; // Already loaded
         }
 
-        try {
-            if (org.broad.igv.util.ParsingUtils.pathExists(genomeId)) {
-                loadGenome(genomeId, null);
+        if (org.broad.igv.util.ParsingUtils.pathExists(genomeId)) {
+            loadGenome(genomeId, null);
 
-            } else {
-                GenomeListItem item = findGenomeListItemById(genomeId);
-                loadGenome(item.getLocation(), null);
-
-            }
-        } catch (IOException e) {
-            log.error("Error loading genome: " + genomeId, e);
-            throw new RuntimeException("Error loading genome: " + genomeId);
+        } else {
+            GenomeListItem item = findGenomeListItemById(genomeId);
+            loadGenome(item.getLocation(), null);
         }
 
     }
@@ -166,7 +161,7 @@ public class GenomeManager {
             Genome newGenome = null;
 
             if (monitor != null) {
-                monitor.fireProgress(25);
+                UIUtilities.invokeAndWaitOnEventThread(() -> monitor.fireProgress(25));
             }
 
             // Clear Feature DB
@@ -201,7 +196,7 @@ public class GenomeManager {
                 monitor.fireProgress(25);
             }
 
-            if(IGV.hasInstance()) IGV.getInstance().resetSession(null);
+            if (IGV.hasInstance()) IGV.getInstance().resetSession(null);
 
             if (!genomeItemMap.containsKey(newGenome.getId())) {
                 GenomeListItem genomeListItem = new GenomeListItem(newGenome.getDisplayName(), genomePath, newGenome.getId());
@@ -211,7 +206,6 @@ public class GenomeManager {
             }
 
             setCurrentGenome(newGenome);
-
 
 
             if (IGV.hasInstance()) {
@@ -601,7 +595,7 @@ public class GenomeManager {
 
                 // Force an update of cached genome if file length does not equal remote content length
                 boolean forceUpdate = remoteModfied &&
-                        PreferenceManager.getInstance().getAsBoolean(PreferenceManager.AUTO_UPDATE_GENOMES);
+                        PreferencesManager.getPreferences().getAsBoolean(Constants.AUTO_UPDATE_GENOMES);
 
                 if (forceUpdate) {
                     log.info("Refreshing genome: " + genomeArchiveURL.toString());
@@ -798,7 +792,7 @@ public class GenomeManager {
             InputStream inputStream = null;
             String genomeListURLString = "";
             try {
-                genomeListURLString = PreferenceManager.getInstance().getGenomeListURL();
+                genomeListURLString = PreferencesManager.getPreferences().getGenomeListURL();
                 URL serverGenomeURL = new URL(genomeListURLString);
 
                 if (HttpUtils.isRemoteURL(genomeListURLString)) {
@@ -843,7 +837,7 @@ public class GenomeManager {
                 log.error("Error fetching genome list: ", e);
                 ConfirmDialog.optionallyShowInfoDialog("Warning: could not connect to the genome server (" +
                                 genomeListURLString + ").    Only locally defined genomes will be available.",
-                        PreferenceManager.SHOW_GENOME_SERVER_WARNING);
+                        Constants.SHOW_GENOME_SERVER_WARNING);
 
             } finally {
                 if (dataReader != null) {
@@ -889,7 +883,7 @@ public class GenomeManager {
      * @param genomeId
      * @return
      */
-    public GenomeListItem findGenomeListItemById(String genomeId) throws IOException {
+    public GenomeListItem findGenomeListItemById(String genomeId) {
 
         GenomeListItem matchingItem = genomeItemMap.get(genomeId);
 
@@ -956,23 +950,18 @@ public class GenomeManager {
 
         try {
             List<GenomeListItem> list = getCachedGenomeArchiveList();
-            for(GenomeListItem item : list) {
+            for (GenomeListItem item : list) {
                 genomeItemMap.put(item.getId(), item);
             }
         } catch (IOException e) {
-           log.error("Error constructing hosted genome list");
+            log.error("Error constructing hosted genome list");
         }
 
-
-        try {
-            Collection<GenomeListItem> list = getUserDefinedGenomeArchiveList();
-            for(GenomeListItem item : list) {
-                genomeItemMap.put(item.getId(), item);
-            }
-
-        } catch (IOException e) {
-            log.error("Error constructing user genome list");
+        Collection<GenomeListItem> list = getUserDefinedGenomeArchiveList();
+        for (GenomeListItem item : list) {
+            genomeItemMap.put(item.getId(), item);
         }
+
 
         if (genomeItemMap.isEmpty()) {
             genomeItemMap.put(DEFAULT_GENOME.getId(), DEFAULT_GENOME);
@@ -989,7 +978,7 @@ public class GenomeManager {
      * @throws IOException
      * @see GenomeListItem
      */
-    public Collection<GenomeListItem> getUserDefinedGenomeArchiveList() throws IOException {
+    public Collection<GenomeListItem> getUserDefinedGenomeArchiveList() {
 
 
         if (userDefinedGenomeArchiveList == null) {
@@ -1041,8 +1030,14 @@ public class GenomeManager {
                 //We swallow this because the user may not have the file,
                 //which doesn't really matter
                 log.info(e);
+            } catch (IOException e) {
+                log.error(e);
+                throw new RuntimeException(e);
             } finally {
-                if (reader != null) reader.close();
+                if (reader != null) try {
+                    reader.close();
+                } catch (IOException e) {
+                }
             }
             if (updateClientGenomeListFile) {
                 updateImportedGenomePropertyFile();
@@ -1246,7 +1241,7 @@ public class GenomeManager {
         File chrAliasFile = null;
 
         if (genomeFile != null) {
-            PreferenceManager.getInstance().setLastGenomeImportDirectory(genomeFile.getParentFile());
+            PreferencesManager.getPreferences().setLastGenomeImportDirectory(genomeFile.getParentFile());
         }
 
         if ((cytobandFileName != null) && (cytobandFileName.trim().length() != 0)) {

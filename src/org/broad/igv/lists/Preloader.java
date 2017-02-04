@@ -27,6 +27,7 @@ package org.broad.igv.lists;
 
 import org.apache.batik.bridge.CursorManager;
 import org.apache.log4j.Logger;
+import org.broad.igv.Globals;
 import org.broad.igv.track.*;
 import org.broad.igv.ui.IGV;
 import org.broad.igv.ui.WaitCursorManager;
@@ -93,23 +94,28 @@ public class Preloader {
     public static synchronized void load(final DataPanel dataPanel) {
 
         ReferenceFrame frame = dataPanel.getFrame();
-log.info("Enter load for " + frame.getFormattedLocusString());
         Collection<Track> trackList = dataPanel.visibleTracks();
         List<CompletableFuture> futures = new ArrayList(trackList.size());
         for (Track track : trackList) {
             if (track.isReadyToPaint(frame) == false) {
-                futures.add(CompletableFuture.runAsync(() -> {
-                    log.info("Loading " + track.getName() + " " + frame.getFormattedLocusString());
-                    WaitCursorManager.CursorToken token = WaitCursorManager.showWaitCursor();
+                final Runnable runnable = () -> {
+               //     log.info("Loading " + track.getName() + " " + frame.getFormattedLocusString());
                     track.load(frame);
-                    WaitCursorManager.removeWaitCursor(token);
-                    log.info("Loaded " + track.getName() + " " + frame.getFormattedLocusString());
-                }, threadExecutor));
+
+               //     log.info("Loaded " + track.getName() + " " + frame.getFormattedLocusString());
+                };
+
+                if(Globals.isBatch()) {
+                    runnable.run();
+                } else {
+                    futures.add(CompletableFuture.runAsync(runnable, threadExecutor));
+                }
             }
         }
 
         if (futures.size() > 0) {
             CompletableFuture[] futureArray = futures.toArray(new CompletableFuture[futures.size()]);
+            WaitCursorManager.CursorToken token = WaitCursorManager.showWaitCursor();
             CompletableFuture.allOf(futureArray).thenRun(() -> {
                 List<Track> unloadedTracks = dataPanel.notloadedTracks();
                 if (unloadedTracks.size() > 0) {
@@ -118,12 +124,24 @@ log.info("Enter load for " + frame.getFormattedLocusString());
 
                 log.info("Call repaint " + dataPanel.hashCode() + " " + dataPanel.allTracksLoaded());
                 dataPanel.loadInProgress = false;
+                WaitCursorManager.removeWaitCursor(token);
                 dataPanel.repaint();
 
             });
         }
 
         log.info("Exit load for " + frame.getFormattedLocusString());
+    }
+
+    private static SequenceTrack findSequenceTrack(Collection<Track> trackList) {
+
+        for(Track t : trackList) {
+            if(t instanceof SequenceTrack) {
+                return (SequenceTrack) t;
+            }
+        }
+        return null;
+
     }
 
 }

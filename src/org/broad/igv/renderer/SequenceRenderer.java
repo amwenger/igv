@@ -30,23 +30,25 @@
 package org.broad.igv.renderer;
 
 import org.apache.log4j.Logger;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.AminoAcid;
 import org.broad.igv.feature.AminoAcidSequence;
 import org.broad.igv.feature.Strand;
+import org.broad.igv.prefs.IGVPreferences;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.track.LoadedDataInterval;
 import org.broad.igv.track.RenderContext;
 import org.broad.igv.track.SequenceTrack;
 import org.broad.igv.ui.FontManager;
 import org.broad.igv.ui.UIConstants;
 import org.broad.igv.ui.color.ColorUtilities;
-import org.broad.igv.util.SOLIDUtils;
 
 import java.awt.*;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
+import static org.broad.igv.prefs.Constants.*;
 
 
 /**
@@ -68,15 +70,15 @@ public class SequenceRenderer {
 
     private synchronized static void setNucleotideColors() {
 
-        PreferenceManager prefs = PreferenceManager.getInstance();
+        IGVPreferences prefs = PreferencesManager.getPreferences();
 
         nucleotideColors = new HashMap();
 
-        Color a = ColorUtilities.stringToColor(prefs.get(PreferenceManager.COLOR_A), new Color(0, 150, 0));
-        Color c = ColorUtilities.stringToColor(prefs.get(PreferenceManager.COLOR_C), Color.blue);
-        Color t = ColorUtilities.stringToColor(prefs.get(PreferenceManager.COLOR_T), Color.red);
-        Color g = ColorUtilities.stringToColor(prefs.get(PreferenceManager.COLOR_G), Color.gray);
-        Color n = ColorUtilities.stringToColor(prefs.get(PreferenceManager.COLOR_N), Color.gray);
+        Color a = ColorUtilities.stringToColor(prefs.get(COLOR_A), new Color(0, 150, 0));
+        Color c = ColorUtilities.stringToColor(prefs.get(COLOR_C), Color.blue);
+        Color t = ColorUtilities.stringToColor(prefs.get(COLOR_T), Color.red);
+        Color g = ColorUtilities.stringToColor(prefs.get(COLOR_G), Color.gray);
+        Color n = ColorUtilities.stringToColor(prefs.get(COLOR_N), Color.gray);
 
         nucleotideColors.put('A', a);
         nucleotideColors.put('a', a);

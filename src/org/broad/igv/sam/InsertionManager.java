@@ -26,9 +26,14 @@
 
 package org.broad.igv.sam;
 
-import org.broad.igv.PreferenceManager;
+import org.broad.igv.feature.genome.Genome;
+import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.PreferencesManager;
 
 import java.util.*;
+
+import static org.broad.igv.prefs.Constants.SAM_HIDE_SMALL_INDEL_BP;
+import static org.broad.igv.prefs.Constants.SAM_SMALL_INDEL_BP_THRESHOLD;
 
 /**
  * Created by jrobinso on 12/22/16.
@@ -97,6 +102,9 @@ public class InsertionManager {
     public void processAlignments(String chr, List<Alignment> alignments) {
 
 
+        Genome genome = GenomeManager.getInstance().getCurrentGenome();
+        chr = genome == null ? chr : genome.getCanonicalChrName(chr);
+
         Map<Integer, InsertionMarker> insertionMap = insertionMaps.get(chr);
         if(insertionMap == null) {
             insertionMap =  Collections.synchronizedMap(new HashMap<>());
@@ -109,8 +117,8 @@ public class InsertionManager {
         }
 
         int minLength = 0;
-        if (PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_HIDE_SMALL_INDEL_BP)) {
-            minLength = PreferenceManager.getInstance().getAsInt(PreferenceManager.SAM_SMALL_INDEL_BP_THRESHOLD);
+        if (PreferencesManager.getPreferences().getAsBoolean(SAM_HIDE_SMALL_INDEL_BP)) {
+            minLength = PreferencesManager.getPreferences().getAsInt(SAM_SMALL_INDEL_BP_THRESHOLD);
         }
 
         for (Alignment a : alignments) {
@@ -124,11 +132,6 @@ public class InsertionManager {
                     InsertionMarker insertionMarker = insertionMap.get(key);
                     if (insertionMarker == null) {
                         insertionMarker = new InsertionMarker(block.getStart(), block.getLength());
-
-                        if (insertionMarker.size > 1000) {
-                            System.out.println();
-                        }
-
                         insertionMap.put(key, insertionMarker);
                         positions.add(block.getStart());
                     } else {

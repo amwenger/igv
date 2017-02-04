@@ -30,13 +30,13 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import org.apache.log4j.Logger;
 import org.broad.igv.DirectoryManager;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.batch.CommandListener;
 import org.broad.igv.ui.util.MessageUtils;
 import org.broad.igv.util.FileUtils;
 import org.broad.igv.util.HttpUtils;
 
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -93,9 +93,9 @@ public class OAuthUtils {
     private void fetchOauthProperties() throws IOException {
 
         String oauthConfig = DirectoryManager.getIgvDirectory() + "/oauth-config.json";
-                //PreferenceManager.getInstance().get(PreferenceManager.OAUTH_CONFIG);
+                //IGVPreferences.getInstance().get(IGVPreferences.OAUTH_CONFIG);
 
-        if(oauthConfig == null) {
+        if(oauthConfig == null || !FileUtils.resourceExists(oauthConfig)) {
             String propString = HttpUtils.getInstance().getContentsAsString(new URL(PROPERTIES_URL));
             JsonParser parser = new JsonParser();
             JsonObject obj = parser.parse(propString).getAsJsonObject().get("installed").getAsJsonObject();

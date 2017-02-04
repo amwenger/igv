@@ -27,10 +27,11 @@ package org.broad.igv.sam;
 
 import org.apache.log4j.Logger;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.Strand;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.IGVPreferences;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.renderer.ContinuousColorScale;
 import org.broad.igv.renderer.GraphicUtils;
 import org.broad.igv.renderer.SequenceRenderer;
@@ -45,8 +46,11 @@ import org.broad.igv.util.ChromosomeColors;
 
 import java.awt.*;
 import java.awt.geom.Rectangle2D;
-import java.util.*;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import static org.broad.igv.prefs.Constants.*;
 
 /**
  * @author jrobinso
@@ -107,15 +111,15 @@ public class AlignmentRenderer {
 
     private static void setNucleotideColors() {
 
-        PreferenceManager prefs = PreferenceManager.getInstance();
+        IGVPreferences prefs = PreferencesManager.getPreferences();
 
         nucleotideColors = new HashMap();
 
-        Color a = ColorUtilities.stringToColor(prefs.get(PreferenceManager.SAM_COLOR_A), Color.green);
-        Color c = ColorUtilities.stringToColor(prefs.get(PreferenceManager.SAM_COLOR_C), Color.blue);
-        Color t = ColorUtilities.stringToColor(prefs.get(PreferenceManager.SAM_COLOR_T), Color.red);
-        Color g = ColorUtilities.stringToColor(prefs.get(PreferenceManager.SAM_COLOR_G), Color.gray);
-        Color n = ColorUtilities.stringToColor(prefs.get(PreferenceManager.SAM_COLOR_N), Color.gray);
+        Color a = ColorUtilities.stringToColor(prefs.get(SAM_COLOR_A), Color.green);
+        Color c = ColorUtilities.stringToColor(prefs.get(SAM_COLOR_C), Color.blue);
+        Color t = ColorUtilities.stringToColor(prefs.get(SAM_COLOR_T), Color.red);
+        Color g = ColorUtilities.stringToColor(prefs.get(SAM_COLOR_G), Color.gray);
+        Color n = ColorUtilities.stringToColor(prefs.get(SAM_COLOR_N), Color.gray);
 
         nucleotideColors.put('A', a);
         nucleotideColors.put('a', a);
@@ -237,11 +241,11 @@ public class AlignmentRenderer {
     }
 
 
-    PreferenceManager prefs;
+    IGVPreferences prefs;
     AlignmentTrack track;
 
     public AlignmentRenderer(AlignmentTrack track) {
-        this.prefs = PreferenceManager.getInstance();
+        this.prefs = PreferencesManager.getPreferences();
         this.track = track;
     }
 
@@ -291,7 +295,7 @@ public class AlignmentRenderer {
         initializeGraphics(context);
         double origin = context.getOrigin();
         double locScale = context.getScale();
-        boolean completeReadsOnly = PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_COMPLETE_READS_ONLY);
+        boolean completeReadsOnly = PreferencesManager.getPreferences().getAsBoolean(SAM_COMPLETE_READS_ONLY);
 
         if ((alignments != null) && (alignments.size() > 0)) {
 
@@ -346,7 +350,7 @@ public class AlignmentRenderer {
             }
 
             // Optionally draw a border around the center base
-            boolean showCenterLine = prefs.getAsBoolean(PreferenceManager.SAM_SHOW_CENTER_LINE);
+            boolean showCenterLine = prefs.getAsBoolean(SAM_SHOW_CENTER_LINE);
             final int bottom = rowRect.y + rowRect.height;
             if (showCenterLine) {
                 // Calculate center lines
@@ -373,14 +377,14 @@ public class AlignmentRenderer {
 
         double origin = context.getOrigin();
         double locScale = context.getScale();
-        boolean completeReadsOnly = PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_COMPLETE_READS_ONLY);
+        boolean completeReadsOnly = PreferencesManager.getPreferences().getAsBoolean(SAM_COMPLETE_READS_ONLY);
 
         if ((alignments != null) && (alignments.size() > 0)) {
 
             Graphics2D g = context.getGraphics2D("INSERTIONS");
             //dhmay adding check for adequate track height
             double dX = 1 / context.getScale();
-            int fontSize = (int)  Math.min(dX, 12);
+            int fontSize = (int) Math.min(dX, 12);
             if (fontSize >= 8) {
                 Font f = FontManager.getFont(Font.BOLD, fontSize);
                 g.setFont(f);
@@ -607,7 +611,7 @@ public class AlignmentRenderer {
     private void drawAlignmentBlock(Graphics2D blockGraphics, Graphics2D outlineGraphics,
                                     Graphics2D clippedGraphics, Graphics2D strandGraphics,
                                     boolean isNegativeStrand, int alignmentChromStart,
-                                    int alignmentChromEnd, int blockChromStart, int blockChromEnd,
+                                    int alignmentChromEnd, double blockChromStart, int blockChromEnd,
                                     int blockPxStart, int blockPxWidth, int y, int h, double locSale,
                                     boolean overlapped, boolean leftClipped, boolean rightClipped) {
 
@@ -698,12 +702,12 @@ public class AlignmentRenderer {
             return;
         }
 
-        boolean flagLargeIndels = prefs.getAsBoolean(PreferenceManager.SAM_FLAG_LARGE_INDELS);
-        int largeInsertionsThreshold = prefs.getAsInt(PreferenceManager.SAM_LARGE_INDELS_THRESHOLD);
-        boolean hideSmallIndelsBP = PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_HIDE_SMALL_INDEL_BP);
-        int indelThresholdBP = PreferenceManager.getInstance().getAsInt(PreferenceManager.SAM_SMALL_INDEL_BP_THRESHOLD);
+        boolean flagLargeIndels = prefs.getAsBoolean(SAM_FLAG_LARGE_INDELS);
+        int largeInsertionsThreshold = prefs.getAsInt(SAM_LARGE_INDELS_THRESHOLD);
+        boolean hideSmallIndelsBP = PreferencesManager.getPreferences().getAsBoolean(SAM_HIDE_SMALL_INDEL_BP);
+        int indelThresholdBP = PreferencesManager.getPreferences().getAsInt(SAM_SMALL_INDEL_BP_THRESHOLD);
         boolean quickConsensus = renderOptions.quickConsensusMode;
-        final float snpThreshold = prefs.getAsFloat(PreferenceManager.SAM_ALLELE_THRESHOLD);
+        final float snpThreshold = prefs.getAsFloat(SAM_ALLELE_THRESHOLD);
 
         // Scale and position of the alignment rendering.
         double locScale = context.getScale();
@@ -751,17 +755,18 @@ public class AlignmentRenderer {
                 alignmentChromEnd = (int) (lastBlock.getStart() + lastBlock.getLength());
 
         /* Clipping */
-        boolean flagClipping = prefs.getAsBoolean(PreferenceManager.SAM_FLAG_CLIPPING);
-        int clippingThreshold = prefs.getAsInt(PreferenceManager.SAM_CLIPPING_THRESHOLD);
+        boolean flagClipping = prefs.getAsBoolean(SAM_FLAG_CLIPPING);
+        int clippingThreshold = prefs.getAsInt(SAM_CLIPPING_THRESHOLD);
         int[] clipping = SAMAlignment.getClipping(alignment.getCigarString());
         boolean leftClipped = flagClipping && ((clipping[0] + clipping[1]) > clippingThreshold);
         boolean rightClipped = flagClipping && ((clipping[2] + clipping[3]) > clippingThreshold);
 
         // BED-style coordinate for the visible context.  Do not draw outside the context.
-        int contextChromStart = (int) context.getOrigin(),
-                contextChromEnd = (int) context.getEndLocation();
+        double contextChromStart = context.getOrigin(),
+                contextChromEnd = Math.ceil(context.getEndLocation());
+
         // BED-style start coordinate for the next alignment block to draw.
-        int blockChromStart = (int) Math.max(alignmentChromStart, contextChromStart);
+        double blockChromStart =   Math.max(alignmentChromStart, contextChromStart);
 
         // Draw aligment blocks separated by gaps.  Define the blocks by walking through the gap list,
         // skipping over gaps that are too small to show at the curren resolution.
@@ -769,8 +774,8 @@ public class AlignmentRenderer {
         if (gaps != null) {
 
             for (Gap gap : gaps) {
-                int gapChromStart = (int) gap.getStart(),
-                        gapChromWidth = (int) gap.getnBases(),
+                int gapChromStart = gap.getStart(),
+                        gapChromWidth = gap.getnBases(),
                         gapChromEnd = gapChromStart + gapChromWidth,
                         gapPxEnd = (int) ((Math.min(contextChromEnd, gapChromEnd) - contextChromStart) / locScale);
 
@@ -817,7 +822,15 @@ public class AlignmentRenderer {
                 gapGraphics.drawLine(blockPxEnd + ggOffset, y + h / 2, gapPxEnd - ggOffset, y + h / 2);
                 // Label the size of the deletion if it is "large" and the label fits.
                 if (flagLargeIndels && (gap.getType() == SAMAlignment.DELETION) && gapChromWidth > largeInsertionsThreshold) {
-                    drawLargeIndelLabel(largeIndelGraphics, false, Globals.DECIMAL_FORMAT.format(gapChromWidth), (int) ((blockPxEnd + gapPxEnd) / 2), y, h, gapPxEnd - blockPxEnd - 2, null);
+                    drawLargeIndelLabel(largeIndelGraphics,
+                            false,
+                            Globals.DECIMAL_FORMAT.format(gapChromWidth),
+                            ((blockPxEnd + gapPxEnd) / 2),
+                            y,
+                            h,
+                            gapPxEnd - blockPxEnd - 2,
+                            context.translateX,
+                            null);
                 }
 
                 // Start the next alignment block after the gap.
@@ -896,7 +909,7 @@ public class AlignmentRenderer {
         ShadeBasesOption shadeBasesOption = renderOptions.shadeBasesOption;
         ColorOption colorOption = renderOptions.getColorOption();
         final boolean quickConsensus = renderOptions.quickConsensusMode;
-        final float snpThreshold = prefs.getAsFloat(PreferenceManager.SAM_ALLELE_THRESHOLD);
+        final float snpThreshold = prefs.getAsFloat(SAM_ALLELE_THRESHOLD);
 
 
         // Disable showAllBases in bisulfite mode
@@ -1019,13 +1032,13 @@ public class AlignmentRenderer {
         }
     }
 
-    private Color getShadedColor(byte qual, Color foregroundColor, Color backgroundColor, PreferenceManager prefs) {
+    private Color getShadedColor(byte qual, Color foregroundColor, Color backgroundColor, IGVPreferences prefs) {
         float alpha = 0;
-        int minQ = prefs.getAsInt(PreferenceManager.SAM_BASE_QUALITY_MIN);
+        int minQ = prefs.getAsInt(SAM_BASE_QUALITY_MIN);
         if (qual < minQ) {
             alpha = 0.1f;
         } else {
-            int maxQ = prefs.getAsInt(PreferenceManager.SAM_BASE_QUALITY_MAX);
+            int maxQ = prefs.getAsInt(SAM_BASE_QUALITY_MAX);
             alpha = Math.max(0.1f, Math.min(1.0f, 0.1f + 0.9f * (qual - minQ) / (maxQ - minQ)));
         }
         // Round alpha to nearest 0.1
@@ -1039,7 +1052,7 @@ public class AlignmentRenderer {
     }
 
     private void drawLargeIndelLabel(Graphics2D g, boolean isInsertion, String labelText, int pxCenter,
-                                     int pxTop, int pxH, int pxWmax, AlignmentBlock insertionBlock) {
+                                     int pxTop, int pxH, int pxWmax, int translateX, AlignmentBlock insertionBlock) {
 
         final int pxPad = 2;   // text padding in the label
         final int pxWing = (pxH > 10) ? 2 : (pxH > 5 ? 1 : 0); // width of the cursor "wing"
@@ -1105,7 +1118,9 @@ public class AlignmentRenderer {
             GraphicUtils.drawCenteredText(labelText, pxLeft, pxTop, pxW, pxH, g);
         } // draw the text if it fits
 
-        if (insertionBlock != null) insertionBlock.setPixelRange(pxLeft, pxRight);
+        if (insertionBlock != null) {
+            insertionBlock.setPixelRange(pxLeft + translateX, pxRight + translateX);
+        }
     }
 
     private void drawInsertions(Rectangle rect, Alignment alignment, RenderContext context, RenderOptions renderOptions,
@@ -1114,9 +1129,9 @@ public class AlignmentRenderer {
         AlignmentBlock[] insertions = alignment.getInsertions();
         double origin = context.getOrigin();
         double locScale = context.getScale();
-        boolean flagLargeIndels = prefs.getAsBoolean(PreferenceManager.SAM_FLAG_LARGE_INDELS);
-        int largeInsertionsThreshold = prefs.getAsInt(PreferenceManager.SAM_LARGE_INDELS_THRESHOLD);
-        final float snpThreshold = prefs.getAsFloat(PreferenceManager.SAM_ALLELE_THRESHOLD);
+        boolean flagLargeIndels = prefs.getAsBoolean(SAM_FLAG_LARGE_INDELS);
+        int largeInsertionsThreshold = prefs.getAsInt(SAM_LARGE_INDELS_THRESHOLD);
+        final float snpThreshold = prefs.getAsFloat(SAM_ALLELE_THRESHOLD);
 
         // TODO Quick consensus for insertions needs worked -- disabled for now
         boolean quickConsensus = false;//renderOptions.quickConsensusMode;
@@ -1124,10 +1139,16 @@ public class AlignmentRenderer {
 
         if (insertions != null) {
 
-            boolean hideSmallIndelsBP = PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_HIDE_SMALL_INDEL_BP);
-            int indelThresholdBP = PreferenceManager.getInstance().getAsInt(PreferenceManager.SAM_SMALL_INDEL_BP_THRESHOLD);
+            InsertionMarker expandedInsertion = InsertionManager.getInstance().getSelectedInsertion(context.getReferenceFrame().getChrName());
+            int expandedPosition = expandedInsertion == null ? -1 : expandedInsertion.position;
+
+            boolean hideSmallIndelsBP = PreferencesManager.getPreferences().getAsBoolean(SAM_HIDE_SMALL_INDEL_BP);
+            int indelThresholdBP = PreferencesManager.getPreferences().getAsInt(SAM_SMALL_INDEL_BP_THRESHOLD);
 
             for (AlignmentBlock aBlock : insertions) {
+
+                if(aBlock.getStart() == expandedPosition) continue;   // Skip, will be drawn expanded
+
                 int x = (int) ((aBlock.getStart() - origin) / locScale);
                 byte[] bases = aBlock.getBases();
                 int bpWidth = bases.length;
@@ -1173,7 +1194,7 @@ public class AlignmentRenderer {
         final int size = bases.length + padding;
         for (int p = 0; p < size; p++) {
 
-            char  c = p < padding ? '-' : (char) bases[p - padding];
+            char c = p < padding ? '-' : (char) bases[p - padding];
 
             Color color = SequenceRenderer.nucleotideColors.get(c);
             if (color == null) {
@@ -1192,8 +1213,11 @@ public class AlignmentRenderer {
             }
 
             drawBase(g, color, c, pX, pY, dX, dY - (leaveMargin ? 2 : 0), false, null);
-
         }
+
+        int leftX = pixelPosition + context.translateX;
+        int rightX = leftX + rect.width;
+        block.setPixelRange(leftX, rightX);
 
     }
 

@@ -28,10 +28,13 @@
 
 package org.broad.igv.variant;
 
+import htsjdk.tribble.Feature;
+import htsjdk.variant.variantcontext.GenotypeType;
 import org.apache.log4j.Logger;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.FeatureUtils;
 import org.broad.igv.feature.IGVFeature;
+import org.broad.igv.prefs.IGVPreferences;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.renderer.GraphicUtils;
 import org.broad.igv.session.IGVSessionReader;
 import org.broad.igv.session.SubtlyImportant;
@@ -43,8 +46,6 @@ import org.broad.igv.ui.event.TrackGroupEventListener;
 import org.broad.igv.ui.panel.*;
 import org.broad.igv.ui.util.MessageUtils;
 import org.broad.igv.util.*;
-import htsjdk.tribble.Feature;
-import htsjdk.variant.variantcontext.GenotypeType;
 
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlType;
@@ -56,6 +57,8 @@ import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.List;
+
+import static org.broad.igv.prefs.Constants.*;
 
 /**
  * @author Jesse Whitworth, Jim Robinson, Fabien Campagne
@@ -192,7 +195,7 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
                         boolean enableMethylationRateSupport) {
         super(locator, source);
 
-        PreferenceManager prefMgr = PreferenceManager.getInstance();
+        IGVPreferences prefMgr = PreferencesManager.getPreferences();
 
         String path = locator == null ? null : locator.getPath();
 
@@ -205,7 +208,7 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
             coloring = ColorMode.METHYLATION_RATE;
         }
 
-        this.siteColorMode = prefMgr.getAsBoolean(PreferenceManager.VARIANT_COLOR_BY_ALLELE_FREQ) ?
+        this.siteColorMode = prefMgr.getAsBoolean(VARIANT_COLOR_BY_ALLELE_FREQ) ?
                 ColorMode.ALLELE_FREQUENCY :
                 ColorMode.ALLELE_FRACTION;
 
@@ -216,6 +219,11 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
 
         setDisplayMode(DisplayMode.EXPANDED);
 
+        int sampleCount = allSamples.size();
+        final int groupCount = samplesByGroups.size();
+        final int margins = (groupCount - 1) * 3;
+        squishedHeight = Math.min(DEFAULT_SQUISHED_GENOTYPE_HEIGHT, Math.max(1, (height - variantBandHeight - margins) / sampleCount));
+
         // Listen for "group by" events.
         if (IGV.hasInstance()) {
             IGV.getInstance().addGroupEventListener(this);
@@ -224,7 +232,7 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
         // If sample->bam list file is supplied enable vcfToBamMode.
         String vcfToBamMapping = locator == null ? null : locator.getMappingPath();
 
-        boolean bypassFileAutoDiscovery = prefMgr.getAsBoolean(PreferenceManager.BYPASS_FILE_AUTO_DISCOVERY);
+        boolean bypassFileAutoDiscovery = prefMgr.getAsBoolean(BYPASS_FILE_AUTO_DISCOVERY);
         if (vcfToBamMapping == null && path != null && !bypassFileAutoDiscovery) {
             if (ParsingUtils.pathExists(path + ".mapping")) {
                 vcfToBamMapping = path + ".mapping";
@@ -239,7 +247,7 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
         // Ugly test on source is to avoid having to add "isIndexed" to a zillion feature source classes.  The intent
         // is to skip this if using a non-indexed source.
         if (!(source instanceof TribbleFeatureSource && ((TribbleFeatureSource) source).isIndexed() == false)) {
-            int defVisibilityWindow = prefMgr.getAsInt(PreferenceManager.DEFAULT_VISIBILITY_WINDOW);
+            int defVisibilityWindow = prefMgr.getAsInt(DEFAULT_VISIBILITY_WINDOW);
             if (defVisibilityWindow > 0) {
                 setVisibilityWindow(defVisibilityWindow * 1000);
             } else {
@@ -428,12 +436,13 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
         final int expandedHeight = variantBandHeight + margins + (sampleCount * getGenotypeBandHeight());
         if (height < expandedHeight) {
             setDisplayMode(DisplayMode.SQUISHED);
-            squishedHeight = Math.max(1, (height - variantBandHeight - margins) / sampleCount);
         } else {
             if (displayMode != DisplayMode.EXPANDED) {
                 setDisplayMode(DisplayMode.EXPANDED);
             }
         }
+
+        squishedHeight = Math.min(DEFAULT_SQUISHED_GENOTYPE_HEIGHT, Math.max(1, (height - variantBandHeight - margins) / sampleCount));
     }
 
 
@@ -570,6 +579,7 @@ public class VariantTrack extends FeatureTrack implements TrackGroupEventListene
                     }
                     tmpRect.y += tmpRect.height;
                 }
+                tmpRect.y += GROUP_BORDER_WIDTH;
             }
         } else {
 

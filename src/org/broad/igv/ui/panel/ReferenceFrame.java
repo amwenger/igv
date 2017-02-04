@@ -31,20 +31,19 @@ package org.broad.igv.ui.panel;
 
 import org.apache.log4j.Logger;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.Chromosome;
 import org.broad.igv.feature.Locus;
 import org.broad.igv.feature.Range;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.Constants;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.sam.InsertionManager;
 import org.broad.igv.sam.InsertionMarker;
 import org.broad.igv.ui.IGV;
 import org.broad.igv.ui.event.IGVEventBus;
 import org.broad.igv.ui.event.ViewChange;
 import org.broad.igv.ui.util.MessageUtils;
-
-import java.util.List;
 
 
 /**
@@ -54,12 +53,12 @@ public class ReferenceFrame {
 
     private static Logger log = Logger.getLogger(ReferenceFrame.class);
 
+    IGVEventBus eventBus;
 
     /**
      * The origin in bp
      */
     public volatile double origin = 0;
-
 
     /**
      * The nominal viewport width in pixels.
@@ -113,11 +112,6 @@ public class ReferenceFrame {
      */
     protected double nTiles = 1;
 
-    /**
-     * The maximum virtual pixel value.
-     */
-    //private double maxPixel;
-
 
     /**
      * The location (x axis) locationScale in base pairs / virtual pixel
@@ -132,15 +126,19 @@ public class ReferenceFrame {
         this.name = name;
         Genome genome = getGenome();
         this.chrName = genome == null ? "" : genome.getHomeChromosome();
+        this.eventBus = IGVEventBus.getInstance();
     }
 
+    public ReferenceFrame(ReferenceFrame otherFrame) {
+        this(otherFrame, otherFrame.eventBus);
+    }
 
     /**
-     * Copy constructor -- used by Sashimii plot
+     * Copy constructor with event bus ovverride -- used by Sashimii plot
      *
      * @param otherFrame
      */
-    public ReferenceFrame(ReferenceFrame otherFrame) {
+    public ReferenceFrame(ReferenceFrame otherFrame, IGVEventBus eventBus) {
         this.chrName = otherFrame.chrName;
         this.initialLocus = otherFrame.initialLocus;
         this.scale = otherFrame.scale;
@@ -149,10 +147,10 @@ public class ReferenceFrame {
         this.nTiles = otherFrame.nTiles;
         this.origin = otherFrame.origin;
         this.pixelX = otherFrame.pixelX;
-        //this.setEnd = otherFrame.setEnd;
         this.widthInPixels = otherFrame.widthInPixels;
         this.zoom = otherFrame.zoom;
         this.maxZoom = otherFrame.maxZoom;
+        this.eventBus = eventBus;
     }
 
     public boolean isVisible() {
@@ -163,14 +161,10 @@ public class ReferenceFrame {
         this.visible = visible;
     }
 
-    public IGVEventBus getEventBus() {
-        return IGVEventBus.getInstance();
-    }
-
 
     public void dragStopped() {
         setOrigin(Math.round(origin));   // Snap to gride
-        getEventBus().post(ViewChange.Result());
+        eventBus.post(ViewChange.Result());
     }
 
     public void changeGenome(Genome genome) {
@@ -179,19 +173,19 @@ public class ReferenceFrame {
 
     public void changeChromosome(String chrName, boolean recordHistory) {
         boolean changed = setChromosomeName(chrName, false);
-        if (changed) {
+       // if (changed) {
             ViewChange resultEvent = ViewChange.ChromosomeChangeResult(chrName);
             resultEvent.setRecordHistory(recordHistory);
-            getEventBus().post(resultEvent);
+            eventBus.post(resultEvent);
             changeZoom(0);
-        }
+       // }
     }
 
     public void changeZoom(int newZoom) {
         doSetZoom(newZoom);
         ViewChange result = ViewChange.Result();
         result.setRecordHistory(false);
-        getEventBus().post(result);
+        eventBus.post(result);
     }
 
 
@@ -248,7 +242,7 @@ public class ReferenceFrame {
     public void setOrigin(double position) {
         int windowLengthBP = (int) (widthInPixels * getScale());
         double newOrigin;
-        if (PreferenceManager.getInstance().getAsBoolean(PreferenceManager.SAM_SHOW_SOFT_CLIPPED)) {
+        if (PreferencesManager.getPreferences().getAsBoolean(Constants.SAM_SHOW_SOFT_CLIPPED)) {
             newOrigin = Math.max(-1000, Math.min(position, getMaxCoordinate() + 1000 - windowLengthBP));
         } else {
             newOrigin = Math.max(0, Math.min(position, getMaxCoordinate() - windowLengthBP));
@@ -380,13 +374,9 @@ public class ReferenceFrame {
 
     public void shiftOriginPixels(int delta) {
 
-//        if(IGV.getInstance().getSession().expandInsertions) {
-//            return;  // Disable panning in expanded insertion mode for now
-//        }
-
         double shiftBP = delta * getScale();
         setOrigin(origin + shiftBP);
-        getEventBus().post(ViewChange.Result());
+        eventBus.post(ViewChange.Result());
     }
 
     public void centerOnLocation(String chr, double chrLocation) {
@@ -399,7 +389,7 @@ public class ReferenceFrame {
     public void centerOnLocation(double chrLocation) {
         double windowWidth = (widthInPixels * getScale()) / 2;
         setOrigin(Math.round(chrLocation - windowWidth));
-        getEventBus().post(ViewChange.LocusChangeResult(chrName, origin, chrLocation + windowWidth));
+        eventBus.post(ViewChange.LocusChangeResult(chrName, origin, chrLocation + windowWidth));
     }
 
     public boolean windowAtEnd() {
@@ -439,6 +429,7 @@ public class ReferenceFrame {
             this.initialLocus = locus;
             this.chrName = chr;
             if (start >= 0 && end >= 0) {
+                log.info("this.origin = " + start);
                 this.origin = start;
                 beforeScaleZoom(locus);
                 computeLocationScale();
@@ -454,7 +445,7 @@ public class ReferenceFrame {
             log.debug("Scale = " + scale);
         }
 
-        getEventBus().post(ViewChange.LocusChangeResult(chrName, start, end));
+        eventBus.post(ViewChange.LocusChangeResult(chrName, start, end));
     }
 
     public double getOrigin() {

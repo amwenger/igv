@@ -27,10 +27,10 @@ package org.broad.igv.renderer;
 
 
 import org.apache.log4j.Logger;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.*;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.track.FeatureTrack;
 import org.broad.igv.track.RenderContext;
 import org.broad.igv.track.Track;
@@ -402,7 +402,7 @@ public class IGVFeatureRenderer extends FeatureRenderer {
             }
 
             if (exprValue != null) {
-                ContinuousColorScale colorScale = PreferenceManager.getInstance().getColorScale(TrackType.GENE_EXPRESSION);
+                ContinuousColorScale colorScale = PreferencesManager.getPreferences().getColorScale(TrackType.GENE_EXPRESSION);
                 Color chartColor = colorScale.getColor(exprValue);
                 g2D = context.getGraphic2DForColor(chartColor);
             }

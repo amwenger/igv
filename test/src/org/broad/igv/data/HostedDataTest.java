@@ -26,11 +26,12 @@
 package org.broad.igv.data;
 
 import org.broad.igv.AbstractHeadlessTest;
-import org.broad.igv.PreferenceManager;
+import org.broad.igv.Globals;
 import org.broad.igv.feature.FeatureDB;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeListItem;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.track.TrackLoader;
 import org.broad.igv.ui.ResourceTree;
 import org.broad.igv.ui.action.LoadFromServerAction;
@@ -228,8 +229,8 @@ public class HostedDataTest extends AbstractHeadlessTest {
     }
 
     private List<GenomeListItem> getServerGenomes() throws IOException {
-        String genomeListPath = PreferenceManager.DEFAULT_GENOME_URL;
-        PreferenceManager.getInstance().overrideGenomeServerURL(genomeListPath);
+        String genomeListPath = Globals.DEFAULT_GENOME_URL;
+        PreferencesManager.getPreferences().overrideGenomeServerURL(genomeListPath);
         List<GenomeListItem> serverSideItemList = GenomeManager.getInstance().getServerGenomeArchiveList();
         assertNotNull("Could not retrieve genome list from server", serverSideItemList);
         assertTrue("Genome list empty", serverSideItemList.size() > 0);

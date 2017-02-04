@@ -27,9 +27,10 @@ package org.broad.igv.ui.panel;
 
 import org.broad.igv.AbstractHeadlessTest;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
+import org.broad.igv.prefs.Constants;
 import org.broad.igv.feature.Locus;
 import org.broad.igv.lists.GeneList;
+import org.broad.igv.prefs.PreferencesManager;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -177,6 +178,6 @@ public class ReferenceFrameTest extends AbstractHeadlessTest{
     }
 
     public static void RFTSetup() {
-        PreferenceManager.getInstance().put(PreferenceManager.FLANKING_REGION, "" + 0);
+        PreferencesManager.getPreferences().put(Constants.FLANKING_REGION, "" + 0);
     }
 }

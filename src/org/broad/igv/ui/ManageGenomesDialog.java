@@ -29,9 +29,10 @@
 
 package org.broad.igv.ui;
 
-import org.broad.igv.PreferenceManager;
+import org.broad.igv.Globals;
 import org.broad.igv.feature.genome.GenomeListItem;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.IGVPreferences;
 import org.broad.igv.ui.util.MessageUtils;
 
 import javax.swing.*;
@@ -347,7 +348,7 @@ public class ManageGenomesDialog extends JDialog {
 
         @Override
         protected Transferable createTransferable(JComponent c) {
-            return new StringSelection(PreferenceManager.generateGenomeIdString(genomeList.getSelectedValuesList()));
+            return new StringSelection(IGVPreferences.generateGenomeIdString(genomeList.getSelectedValuesList()));
         }
 
         @Override
@@ -360,7 +361,7 @@ public class ManageGenomesDialog extends JDialog {
             String[] genomeIds;
             try {
                 String genomeIdString = (String) support.getTransferable().getTransferData(DataFlavor.stringFlavor);
-                genomeIds = genomeIdString.split(PreferenceManager.HISTORY_DELIMITER);
+                genomeIds = genomeIdString.split(Globals.HISTORY_DELIMITER);
             } catch (UnsupportedFlavorException e) {
                 return false;
             } catch (IOException e) {

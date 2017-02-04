@@ -26,12 +26,13 @@
 package org.broad.igv.ui;
 
 import com.jidesoft.plaf.LookAndFeelFactory;
-import jargs.gnu.CmdLineParser;
 import htsjdk.samtools.seekablestream.SeekableStreamFactory;
+import jargs.gnu.CmdLineParser;
 import org.apache.log4j.Logger;
 import org.broad.igv.DirectoryManager;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
+import org.broad.igv.prefs.IGVPreferences;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.ui.event.GlobalKeyDispatcher;
 import org.broad.igv.util.HttpUtils;
 import org.broad.igv.util.RuntimeUtils;
@@ -42,10 +43,13 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
+import java.io.UnsupportedEncodingException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.util.Arrays;
 import java.util.HashSet;
+
+import static org.broad.igv.prefs.Constants.*;
 
 
 /**
@@ -78,20 +82,26 @@ public class Main {
 
         Thread.setDefaultUncaughtExceptionHandler(new DefaultExceptionHandler());
 
-        Main.IGVArgs igvArgs = new Main.IGVArgs(args);
+        final Main.IGVArgs igvArgs = new Main.IGVArgs(args);
 
         // Do this early
         if (igvArgs.igvDirectory != null) {
             setIgvDirectory(igvArgs);
         }
 
-        initApplication();
+        Runnable runnable = new Runnable() {
+            public void run() {
+                initApplication();
 
-        JFrame frame = new JFrame();
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        ImageIcon icon = new ImageIcon(Main.class.getResource("mainframeicon.png"));
-        if (icon != null) frame.setIconImage(icon.getImage());
-        open(frame, igvArgs);
+                JFrame frame = new JFrame();
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                ImageIcon icon = new ImageIcon(Main.class.getResource("mainframeicon.png"));
+                if (icon != null) frame.setIconImage(icon.getImage());
+                open(frame, igvArgs);
+            }
+        };
+
+        SwingUtilities.invokeLater(runnable);
 
     }
 
@@ -154,10 +164,10 @@ public class Main {
 
     public static void updateTooltipSettings() {
         ToolTipManager.sharedInstance().setEnabled(true);
-        final PreferenceManager prefMgr = PreferenceManager.getInstance();
-        ToolTipManager.sharedInstance().setInitialDelay(prefMgr.getAsInt(PreferenceManager.TOOLTIP_INITIAL_DELAY));
-        ToolTipManager.sharedInstance().setReshowDelay(prefMgr.getAsInt(PreferenceManager.TOOLTIP_RESHOW_DELAY));
-        ToolTipManager.sharedInstance().setDismissDelay(prefMgr.getAsInt(PreferenceManager.TOOLTIP_DISMISS_DELAY));
+        final IGVPreferences prefMgr = PreferencesManager.getPreferences();
+        ToolTipManager.sharedInstance().setInitialDelay(prefMgr.getAsInt(TOOLTIP_INITIAL_DELAY));
+        ToolTipManager.sharedInstance().setReshowDelay(prefMgr.getAsInt(TOOLTIP_RESHOW_DELAY));
+        ToolTipManager.sharedInstance().setDismissDelay(prefMgr.getAsInt(TOOLTIP_DISMISS_DELAY));
 
     }
 
@@ -172,7 +182,7 @@ public class Main {
                     final String serverVersionString = HttpUtils.getInstance().getContentsAsString(new URL(Globals.getVersionURL())).trim();
                     // See if user has specified to skip this update
 
-                    final String skipString = PreferenceManager.getInstance().get(PreferenceManager.SKIP_VERSION);
+                    final String skipString = PreferencesManager.getPreferences().get(SKIP_VERSION);
                     HashSet<String> skipVersion = new HashSet<String>(Arrays.asList(skipString.split(",")));
                     if (skipVersion.contains(serverVersionString)) return;
 
@@ -188,7 +198,7 @@ public class Main {
         //                        dlg.setVisible(true);
         //                        if (dlg.isSkipVersion()) {
         //                            String newSkipString = skipString + "," + serverVersionString;
-        //                            PreferenceManager.getInstance().put(PreferenceManager.SKIP_VERSION, newSkipString);
+        //                            IGVPreferences.getInstance().put(IGVPreferences.SKIP_VERSION, newSkipString);
         //                        }
         //                    }
         //                });
@@ -254,13 +264,13 @@ public class Main {
 
         // Optional arguments
         if (igvArgs.getPropertyOverrides() != null) {
-            PreferenceManager.getInstance().loadOverrides(igvArgs.getPropertyOverrides());
+            PreferencesManager.loadOverrides(igvArgs.getPropertyOverrides());
         }
         if (igvArgs.getDataServerURL() != null) {
-            PreferenceManager.getInstance().overrideDataServerURL(igvArgs.getDataServerURL());
+            PreferencesManager.getPreferences().overrideDataServerURL(igvArgs.getDataServerURL());
         }
         if (igvArgs.getGenomeServerURL() != null) {
-            PreferenceManager.getInstance().overrideGenomeServerURL(igvArgs.getGenomeServerURL());
+            PreferencesManager.getPreferences().overrideGenomeServerURL(igvArgs.getGenomeServerURL());
         }
 
 
@@ -286,12 +296,12 @@ public class Main {
         }
 
         double resolutionScale = Toolkit.getDefaultToolkit().getScreenResolution() / Globals.DESIGN_DPI;
-        final PreferenceManager prefMgr = PreferenceManager.getInstance();
+        final IGVPreferences prefMgr = PreferencesManager.getPreferences();
         if (resolutionScale > 1.5) {
-            if (prefMgr.getAsBoolean(PreferenceManager.SCALE_FONTS)) {
+            if (prefMgr.getAsBoolean(SCALE_FONTS)) {
                 FontManager.scaleFontSize(resolutionScale);
-            } else if (prefMgr.hasExplicitValue(PreferenceManager.DEFAULT_FONT_SIZE)) {
-                int fs = prefMgr.getAsInt(PreferenceManager.DEFAULT_FONT_SIZE);
+            } else if (prefMgr.hasExplicitValue(DEFAULT_FONT_SIZE)) {
+                int fs = prefMgr.getAsInt(DEFAULT_FONT_SIZE);
                 FontManager.updateSystemFontSize(fs);
             }
         }
@@ -419,16 +429,16 @@ public class Main {
             } catch (CmdLineParser.UnknownOptionException e) {
                 e.printStackTrace();
             }
-            propertyOverrides = (String) parser.getOptionValue(propertyFileOption);
-            batchFile = (String) parser.getOptionValue(batchFileOption);
+            propertyOverrides = getDecodedValue(parser, propertyFileOption);
+            batchFile = getDecodedValue(parser, batchFileOption);
             port = (String) parser.getOptionValue(portOption);
             genomeId = (String) parser.getOptionValue(genomeOption);
-            dataServerURL = (String) parser.getOptionValue(dataServerOption);
-            genomeServerURL = (String) parser.getOptionValue(genomeServerOption);
-            indexFile = (String) parser.getOptionValue(indexFileOption);
-            coverageFile = (String) parser.getOptionValue(coverageFileOption);
+            dataServerURL = getDecodedValue(parser, dataServerOption);
+            genomeServerURL = getDecodedValue(parser, genomeServerOption);
+            indexFile = getDecodedValue(parser, indexFileOption);
+            coverageFile = getDecodedValue(parser, coverageFileOption);
             name = (String) parser.getOptionValue(nameOption);
-            igvDirectory = (String) parser.getOptionValue(igvDirectoryOption);
+            igvDirectory = getDecodedValue(parser, igvDirectoryOption);
 
             String[] nonOptionArgs = parser.getRemainingArgs();
             if (nonOptionArgs != null && nonOptionArgs.length > 0) {
@@ -446,29 +456,20 @@ public class Main {
                     locusString = nonOptionArgs[1];
                 }
 
-// Alternative implementation
-//                String firstArg = StringUtils.decodeURL(nonOptionArgs[0]);
-//                firstArg=checkEqualsAndExtractParamter(firstArg);
-//                if (firstArg != null && !firstArg.equals("ignore")) {
-//                    log.info("Loading: " + firstArg);
-//                    if (firstArg.endsWith(".xml") || firstArg.endsWith(".php") || firstArg.endsWith(".php3")
-//                            || firstArg.endsWith(".session")) {
-//                        sessionFile = firstArg;
-//
-//                    } else {
-//                        dataFileString = firstArg;
-//                    }
-//                }
-//
-//                if (nonOptionArgs.length > 1) {
-//                    // check if arg contains = for all args
-//                    for (String arg: nonOptionArgs ) {
-//                        arg = checkEqualsAndExtractParamter(arg);
-//                        if (arg != null) locusString = arg;
-//
-//                    }
-//
-//                }
+
+            }
+        }
+
+        private String getDecodedValue(CmdLineParser parser, CmdLineParser.Option option){
+
+            String value =  (String) parser.getOptionValue(option);
+            if(value == null) return null;
+
+            try {
+                return URLDecoder.decode(value, "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                log.error(e);
+                return value;
             }
         }
 

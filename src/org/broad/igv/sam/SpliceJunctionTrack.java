@@ -28,9 +28,9 @@ package org.broad.igv.sam;
 
 import htsjdk.tribble.Feature;
 import org.apache.log4j.Logger;
-import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.SpliceJunctionFeature;
+import org.broad.igv.prefs.Constants;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.renderer.DataRange;
 import org.broad.igv.renderer.SpliceJunctionRenderer;
 import org.broad.igv.track.*;
@@ -97,7 +97,7 @@ public class SpliceJunctionTrack extends FeatureTrack {
 
 
     protected boolean isShowFeatures(ReferenceFrame frame) {
-        float maxRange = PreferenceManager.getInstance().getAsFloat(PreferenceManager.SAM_MAX_VISIBLE_RANGE);
+        float maxRange = PreferencesManager.getPreferences().getAsFloat(Constants.SAM_MAX_VISIBLE_RANGE);
         float minVisibleScale = (maxRange * 1000) / 700;
         return frame.getScale() < minVisibleScale;
     }
@@ -227,9 +227,9 @@ public class SpliceJunctionTrack extends FeatureTrack {
     }
 
     @Override
-    protected void loadFeatures(String chr, int start, int end, ReferenceFrame referenceFrame) {
+    protected void loadFeatures(String chr, int start, int end, ReferenceFrame frame) {
 
-        AlignmentInterval loadedInterval = dataManager.getLoadedInterval(referenceFrame);
+        AlignmentInterval loadedInterval = dataManager.getLoadedInterval(frame);
         if (loadedInterval == null) return;
 
         SpliceJunctionHelper helper = loadedInterval.getSpliceJunctionHelper();
@@ -240,7 +240,7 @@ public class SpliceJunctionTrack extends FeatureTrack {
         int intervalStart = loadedInterval.getStart();
         int intervalEnd = loadedInterval.getEnd();
         PackedFeatures pf = new PackedFeaturesSpliceJunctions(chr, intervalStart, intervalEnd, features.iterator(), getName());
-        packedFeaturesMap.put(referenceFrame.getName(), pf);
+        packedFeaturesMap.put(frame.getName(), pf);
     }
 
     @Override

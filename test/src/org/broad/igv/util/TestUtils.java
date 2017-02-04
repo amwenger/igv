@@ -27,14 +27,13 @@ package org.broad.igv.util;
 
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
-import htsjdk.samtools.util.ftp.FTPClient;
 import org.broad.igv.DirectoryManager;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.feature.NamedFeature;
 import org.broad.igv.feature.genome.Genome;
 import org.broad.igv.feature.genome.GenomeListItem;
 import org.broad.igv.feature.genome.GenomeManager;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.tools.IgvTools;
 import org.broad.igv.track.Track;
 import org.broad.igv.ui.IGV;
@@ -103,7 +102,7 @@ public class TestUtils {
         File prefsFile = new File("testprefs.properties");
         prefsFile.delete();
         prefsFile.deleteOnExit();
-        PreferenceManager.getInstance().setPrefsFile(prefsFile.getAbsolutePath());
+        PreferencesManager.setPrefsFile(prefsFile.getAbsolutePath());
     }
 
     /**

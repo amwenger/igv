@@ -32,19 +32,21 @@ import htsjdk.samtools.util.ftp.FTPStream;
 import org.apache.log4j.Logger;
 import org.apache.tomcat.util.HttpDate;
 import org.broad.igv.Globals;
-import org.broad.igv.PreferenceManager;
 import org.broad.igv.exceptions.HttpResponseException;
 import org.broad.igv.ga4gh.OAuthUtils;
 import org.broad.igv.gs.GSUtils;
+import org.broad.igv.prefs.IGVPreferences;
+import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.ui.IGV;
-import org.broad.igv.ui.util.CancellableProgressDialog;
-import org.broad.igv.ui.util.ProgressMonitor;
+import org.broad.igv.ui.util.MessageUtils;
 import org.broad.igv.util.collections.CI;
 import org.broad.igv.util.ftp.FTPUtils;
-import org.broad.igv.util.stream.IGVSeekableHTTPStream;
 import org.broad.igv.util.stream.IGVUrlHelper;
 
-import javax.net.ssl.*;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -56,6 +58,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.List;
 import java.util.regex.Pattern;
+
+import static org.broad.igv.prefs.Constants.*;
+import static org.broad.igv.util.stream.SeekableServiceStream.WEBSERVICE_URL;
 
 /**
  * Wrapper utility class... for interacting with HttpURLConnection.
@@ -134,7 +139,7 @@ public class HttpUtils {
      * @throws IOException
      */
     public String getContentsAsString(URL url) throws IOException {
-       return getContentsAsString(url, null);
+        return getContentsAsString(url, null);
     }
 
 
@@ -150,7 +155,8 @@ public class HttpUtils {
             throw e;
         } finally {
             if (is != null) is.close();
-        }    }
+        }
+    }
 
 
     public String getContentsAsJSON(URL url) throws IOException {
@@ -379,25 +385,25 @@ public class HttpUtils {
         String user = null;
         String pw = null;
 
-        PreferenceManager prefMgr = PreferenceManager.getInstance();
-        useProxy = prefMgr.getAsBoolean(PreferenceManager.USE_PROXY);
-        proxyHost = prefMgr.get(PreferenceManager.PROXY_HOST, null);
+        IGVPreferences prefMgr = PreferencesManager.getPreferences();
+        useProxy = prefMgr.getAsBoolean(USE_PROXY);
+        proxyHost = prefMgr.get(PROXY_HOST, null);
         try {
-            proxyPort = Integer.parseInt(prefMgr.get(PreferenceManager.PROXY_PORT, "-1"));
+            proxyPort = Integer.parseInt(prefMgr.get(PROXY_PORT, "-1"));
         } catch (NumberFormatException e) {
             proxyPort = -1;
         }
-        auth = prefMgr.getAsBoolean(PreferenceManager.PROXY_AUTHENTICATE);
-        user = prefMgr.get(PreferenceManager.PROXY_USER, null);
-        String pwString = prefMgr.get(PreferenceManager.PROXY_PW, null);
+        auth = prefMgr.getAsBoolean(PROXY_AUTHENTICATE);
+        user = prefMgr.get(PROXY_USER, null);
+        String pwString = prefMgr.get(PROXY_PW, null);
         if (pwString != null) {
             pw = Utilities.base64Decode(pwString);
         }
 
-        String proxyTypeString = prefMgr.get(PreferenceManager.PROXY_TYPE, "HTTP");
+        String proxyTypeString = prefMgr.get(PROXY_TYPE, "HTTP");
         Proxy.Type type = Proxy.Type.valueOf(proxyTypeString.trim().toUpperCase());
 
-        String proxyWhitelistString = prefMgr.get(PreferenceManager.PROXY_WHITELIST);
+        String proxyWhitelistString = prefMgr.get(PROXY_WHITELIST);
         Set<String> whitelist = proxyWhitelistString == null ? new HashSet<String>() :
                 new HashSet(Arrays.asList(Globals.commaPattern.split(proxyWhitelistString)));
 
@@ -467,15 +473,15 @@ public class HttpUtils {
                     urlDownloader.cancel(true);
                 }
             };
-          //  String permText = "Downloading " + url;
-          //  String title = dialogTitle != null ? dialogTitle : permText;
-          //  CancellableProgressDialog dialog = CancellableProgressDialog.showCancellableProgressDialog(dialogsParent, title, buttonListener, false, monitor);
-          //  dialog.setPermText(permText);
+            //  String permText = "Downloading " + url;
+            //  String title = dialogTitle != null ? dialogTitle : permText;
+            //  CancellableProgressDialog dialog = CancellableProgressDialog.showCancellableProgressDialog(dialogsParent, title, buttonListener, false, monitor);
+            //  dialog.setPermText(permText);
 
-          //  Dimension dms = new Dimension(600, 150);
-          //  dialog.setPreferredSize(dms);
-          //  dialog.setSize(dms);
-          //  dialog.validate();
+            //  Dimension dms = new Dimension(600, 150);
+            //  dialog.setPreferredSize(dms);
+            //  dialog.setSize(dms);
+            //  dialog.validate();
 
             LongRunningTask.submit(urlDownloader);
             return urlDownloader;
@@ -636,10 +642,8 @@ public class HttpUtils {
     private HttpURLConnection openConnection(
             URL url, Map<String, String> requestProperties, String method, int redirectCount) throws IOException {
 
-        if(SwingUtilities.isEventDispatchThread()) {
-            System.out.println();
-        }
-            log.info("Open connection");
+        log.info("Open connection");
+
         // Map amazon cname aliases to the full hosts -- neccessary to avoid ssl certificate errors in Java 1.8
         url = mapCname(url);
 
@@ -722,6 +726,21 @@ public class HttpUtils {
 
             int code = conn.getResponseCode();
 
+            if (requestProperties != null && requestProperties.containsKey("Range") && code != 206 && method.equals("GET")) {
+                log.error("Range header removed by client or ignored by server for url: " + url.toString());
+
+                if(!SwingUtilities.isEventDispatchThread()) {
+                    MessageUtils.showMessage("Warning: unsuccessful attempt to execute 'Range byte' request to host " + url.getHost());
+                }
+                
+                byteRangeTestMap.put(url.getHost(), false);
+                String[] positionString = requestProperties.get("Range").split("=")[1].split("-");
+                int length = Integer.parseInt(positionString[1]) - Integer.parseInt(positionString[0]) + 1;
+                requestProperties.remove("Range"); // < VERY IMPORTANT
+                URL wsUrl = new URL(WEBSERVICE_URL + "?file=" + url.toExternalForm() + "&position=" + positionString[0] + "&length=" + length);
+                return openConnection(wsUrl, requestProperties, "GET", redirectCount);
+            }
+
             if (log.isDebugEnabled()) {
                 //logHeaders(conn);
             }
@@ -765,6 +784,7 @@ public class HttpUtils {
 
     /**
      * Explicitly map cnames here.  Also fix other url migration issues.
+     *
      * @param url
      * @return
      */
