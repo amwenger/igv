@@ -178,6 +178,8 @@ public class TrackNamePanel extends TrackPanelComponent implements Paintable {
                 }
 
             }
+            graphics2D.dispose();
+            greyGraphics.dispose();
         }
     }
 
@@ -220,8 +222,15 @@ public class TrackNamePanel extends TrackPanelComponent implements Paintable {
 
                     if (!isGrouped() || showSampleNamesWhenGrouped) {
                         Rectangle rect = new Rectangle(regionX, regionY, width, height);
-                        graphics2D.setBackground(backgroundColor);
-                        track.renderName(graphics2D, rect, visibleRect);
+                        if (track.isSelected()) {
+                            graphics2D.setBackground(Color.LIGHT_GRAY);
+                            graphics2D.clearRect(rect.x, rect.y, rect.width, rect.height);
+                        } else {
+                            graphics2D.setBackground(backgroundColor);
+                        }
+                        Graphics2D trackGraphics = (Graphics2D) graphics2D.create();
+                        track.renderName(trackGraphics, rect, visibleRect);
+                        trackGraphics.dispose();
                     }
 
                 }
