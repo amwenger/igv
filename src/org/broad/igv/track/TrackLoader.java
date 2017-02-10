@@ -948,11 +948,11 @@ public class TrackLoader {
 
             AlignmentTrack alignmentTrack = new AlignmentTrack(locator, dataManager, genome);    // parser.loadTrack(locator, dsName);
             alignmentTrack.setName("");
-            alignmentTrack.setVisible(PreferenceManager.getPreferences().getAsBoolean(PreferenceManager.SAM_SHOW_ALIGNMENT_TRACK));
+            alignmentTrack.setVisible(PreferencesManager.getPreferences().getAsBoolean(SAM_SHOW_ALIGNMENT_TRACK));
 
             // Create coverage track
             CoverageTrack covTrack = new CoverageTrack(locator, dsName.substring(0,dsName.length()-4), alignmentTrack, genome);
-            covTrack.setVisible(PreferenceManager.getPreferences().getAsBoolean(PreferenceManager.SAM_SHOW_COV_TRACK));
+            covTrack.setVisible(PreferencesManager.getPreferences().getAsBoolean(SAM_SHOW_COV_TRACK));
 
             newTracks.add(covTrack);
             covTrack.setDataManager(dataManager);

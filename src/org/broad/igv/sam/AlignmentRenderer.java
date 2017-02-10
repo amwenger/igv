@@ -49,6 +49,7 @@ import java.awt.geom.Rectangle2D;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 
 import static org.broad.igv.prefs.Constants.*;
 
@@ -1166,12 +1167,11 @@ public class AlignmentRenderer {
                 if ((!hideSmallIndelsBP || bpWidth >= indelThresholdBP) &&
                         (!quickConsensus || alignmentCounts.isConsensusInsertion(aBlock.getStart(), snpThreshold))) {
                     int labelWidth = (flagLargeIndels && bpWidth > largeInsertionsThreshold) ? (int) pxWidthExact : 2;
-                    drawLargeIndelLabel(context.getGraphics2D("INDEL_LABEL"), true, Globals.DECIMAL_FORMAT.format(bpWidth), x - 1, y, h, labelWidth, aBlock);
+                    drawLargeIndelLabel(context.getGraphics2D("INDEL_LABEL"), true, Globals.DECIMAL_FORMAT.format(bpWidth), x - 1, y, h, labelWidth, context.translateX, aBlock);
                 }
             }
         }
     }
-
 
     private void drawExpandedInsertionBases(int pixelPosition,
                                             RenderContext context,
