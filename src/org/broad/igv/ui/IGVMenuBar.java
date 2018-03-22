@@ -404,8 +404,6 @@ public class IGVMenuBar extends JMenuBar implements IGVEventObserver {
         List<JComponent> menuItems = new ArrayList<JComponent>();
         MenuAction menuAction = null;
 
-        menuItems.add(new JSeparator());
-
         // Load menu items
         menuAction = new LoadFilesMenuAction("Load from File...", KeyEvent.VK_L, igv);
         menuAction.setToolTipText(UIConstants.LOAD_TRACKS_TOOLTIP);
