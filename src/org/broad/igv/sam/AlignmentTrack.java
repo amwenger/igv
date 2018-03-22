@@ -41,6 +41,7 @@ import org.broad.igv.prefs.IGVPreferences;
 import org.broad.igv.prefs.PreferencesManager;
 import org.broad.igv.renderer.GraphicUtils;
 import org.broad.igv.sam.mutreview.VariantReviewAction;
+import org.broad.igv.sam.SAMAlignment;
 import org.broad.igv.session.IGVSessionReader;
 import org.broad.igv.session.Session;
 import org.broad.igv.session.SubtlyImportant;
@@ -85,6 +86,10 @@ import java.awt.geom.Rectangle2D;
 import java.text.NumberFormat;
 import java.util.*;
 import java.util.List;
+import java.io.IOException;
+import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import static org.broad.igv.prefs.Constants.*;
 
@@ -1135,7 +1140,6 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
             } else {
                 setSelected(alignment);
             }
-
         }
     }
 
@@ -1415,12 +1419,10 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
                 add(popupTitle);
             }
             addSeparator();
+            addTraceviewerItem(e);
+            addSeparator();
             add(TrackMenuUtils.getTrackRenameItem(tracks));
             addCopyToClipboardItem(e, clickedAlignment);
-
-            //         addSeparator();
-            //          addExpandInsertions();
-
 
             if (dataManager.isTenX()) {
                 addTenXItems();
@@ -2146,6 +2148,141 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
                 String blatSeq = alignment.getReadStrand() == Strand.NEGATIVE ?
                         SequenceTrack.getReverseComplement(seq) : seq;
                 BlatClient.doBlatQuery(blatSeq);
+            });
+
+        }
+
+        /* Find the query position that aligns to a given reference position.
+           Measure query position relative to the alignment strand, not the
+           original read coordinate.  */
+        private int refPosToQueryPos(Alignment alignment, int refPos) {
+            String cigarString = alignment.getCigarString();
+            java.util.List<SAMAlignment.CigarOperator> cigarOps = SAMAlignment.buildOperators(cigarString);
+
+            int rPos = alignment.getAlignmentStart();
+            int qPos = 0;
+
+            // Bring refPos within the span of the alignment.
+            // If the request position is before the alignment
+            // start then just return the first aligning query
+            // position.  If it is after the alignment end, then
+            // return the last aligning query position.
+            if (refPos < rPos) {
+                refPos = rPos;
+            }
+            else if (refPos > alignment.getAlignmentEnd()) {
+                refPos = alignment.getAlignmentEnd();
+            }
+
+            for (SAMAlignment.CigarOperator cigarOp : cigarOps) {
+                char op = cigarOp.operator;
+                int opLen = cigarOp.nBases;
+                int opQLen = 0, opRLen = 0;
+
+                if (op == 'H' || op == 'S') {
+                    opQLen = opLen;
+                }
+                else if (op == 'D' || op == 'N') {
+                    opRLen = opLen;
+                }
+                else if (op == 'I') {
+                    opQLen = opLen;
+                }
+                else if (op == 'M' || op == 'X' || op == '=') {
+                    opQLen = opLen;
+                    opRLen = opLen;
+                }
+
+                // If this CIGAR operator extends beyond the target position.
+                if ((rPos + opRLen) > refPos) {
+                    opRLen = refPos - rPos;
+                    opQLen = opRLen;
+                }
+
+                rPos += opRLen;
+                qPos += opQLen;
+
+                if (op != 'H' && op != 'S' && rPos == refPos) {
+                    break;
+                }
+            }
+
+            return qPos;
+        }
+
+        public void addTraceviewerItem(final TrackClickEvent te) {
+            final JMenuItem item = new JMenuItem("Open in Trace Viewer");
+            add(item);
+
+            final Alignment alignment = getSpecficAlignment(te);
+            if (alignment == null) {
+                item.setEnabled(false);
+                return;
+            }
+
+            String readNameParts[] = alignment.getReadName().split("/");
+            if (readNameParts.length != 3) {
+                item.setEnabled(false);
+                return;
+            }
+            String movieName = readNameParts[0];
+            String zmw = readNameParts[1];
+            String coords = readNameParts[2];
+            String coordParts[] = coords.split("_");
+            if (coordParts.length != 2) {
+                item.setEnabled(false);
+                return;
+            }
+            int qStart = Integer.valueOf(coordParts[0]),
+                qEnd = Integer.valueOf(coordParts[1]);
+            Strand strand = alignment.getReadStrand();
+            if (strand != Strand.POSITIVE && strand != Strand.NEGATIVE) {
+                item.setEnabled(false);
+                return;
+            }
+
+            item.addActionListener(aEvt -> {
+                final ReferenceFrame frame = te.getFrame();
+                MouseEvent e = te.getMouseEvent();
+                final int clickPos = (int) (frame.getChromosomePosition(e.getX())); // 0-based
+
+                // find the reference start and end for the current viewframe
+                int viewStart = (int) frame.getOrigin(),
+                    viewEnd   = (int) frame.getEnd();
+                // convert to query coordinates
+                int qViewStart = refPosToQueryPos(alignment, viewStart),
+                    qViewEnd = refPosToQueryPos(alignment, viewEnd);
+                // adjust to polymerase coordinates
+                if (strand == Strand.POSITIVE) {
+                    qViewStart += qStart;
+                    qViewEnd += qStart;
+                }
+                else {
+                    int tmpQViewStart = qViewStart;
+                    qViewStart = qEnd - qViewEnd;
+                    qViewEnd = qEnd - tmpQViewStart;
+                }
+
+                String url = "http://smrtserver:8080" +
+                             "/smrtserver/store/apps/traceviewer/traceviewer.html?" +
+                             "trace=/pbi/dept/bifx/awenger/traceviewer/" + movieName + "/" + movieName + ".trc.h5" +
+                             "&stats=/pbi/dept/bifx/awenger/traceviewer/" + movieName + "/" + movieName + ".sts.h5" +
+                             "&subreads=/pbi/dept/bifx/awenger/traceviewer/" + movieName + "/" + movieName + ".subreads.bam" +
+                             "&scraps=/pbi/dept/bifx/awenger/traceviewer/" + movieName + "/" + movieName + ".scraps.bam" +
+                             "&alignmentset=/pbi/dept/bifx/awenger/traceviewer/" + movieName + "/" + movieName + ".alignmentset.xml" +
+                             "&holen=" + zmw +
+                             "&qstart=" + Integer.toString(qViewStart) +
+                             "&qend=" + Integer.toString(qViewEnd);
+
+                try {
+                    if (Desktop.isDesktopSupported()) {
+                        Desktop desktop = Desktop.getDesktop();
+                        desktop.browse(new URI(url));
+                    }
+                }
+                catch (IOException | URISyntaxException exc) {
+                    log.info("URISyntaxException when opening traceviewer");
+                }
             });
 
         }
